@@ -17,12 +17,10 @@ initialize()
 	defineConstant("forwards_cap_time", 500-captive_time);
 }
 
-
 1 late() {                      
 	sim.addSubpop("p0", asInteger(pop_size_domestic_1));
 	sim.addSubpop("p1", asInteger(pop_size_wild_1));
 }
-
 
 1: {
 	if (sim.generation >= forwards_mig_time){
