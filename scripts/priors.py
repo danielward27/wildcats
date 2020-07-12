@@ -13,6 +13,7 @@ dist = {
     "pop_size_domestic_1": ss.uniform(100, 10000),  # ss.uniform(100, 15000),
     "pop_size_wild_1": ss.lognorm(0.4, scale=np.exp(8)),  # ss.lognorm(0.4, scale=np.exp(8.5)),
     "pop_size_captive": ss.lognorm(0.5, scale=np.exp(4.5)),
+    "mig_rate_captive": ss.beta(2, 50),
     "captive_time": ss.lognorm(0.7, scale=np.exp(3)),
     "mig_length_wild": ss.lognorm(0.7, scale=np.exp(3)),
     "mig_rate_wild": ss.beta(2, 50),
@@ -43,7 +44,7 @@ for key, d in dist.items():
     plt.savefig("../plots/prior/{}.png".format(key))
     plt.clf()
 
-float_col_names = ["mig_rate_wild", "mig_rate_post_split"]
+float_col_names = [col for col in list(df) if "mig_rate" in col]
 int_col_names = [x for x in list(df) if x not in float_col_names]
 df[int_col_names] = df[int_col_names].round().astype(int)
 

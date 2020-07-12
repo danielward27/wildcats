@@ -23,26 +23,14 @@ prior_df[int_col_names] = prior_df[int_col_names].astype(int)
 for i in range(start_index, end_index):
     params = prior_df.astype(object).iloc[i].to_dict()  # Row of parameters
 
-    slim_parameters = {
-        'pop_size_domestic_1': params["pop_size_domestic_1"],  # Population sizes are diploid.
-        'pop_size_wild_1': params["pop_size_wild_1"],
-        'pop_size_captive': params["pop_size_captive"],
-        'mig_length_wild': params["mig_length_wild"],
-        'mig_rate_wild': params["mig_rate_wild"],  # Rate of migration from domestic -> wildcats
-        'captive_time': params["captive_time"],  # Time captive population established in SLiM
-    }
+    slim_parameters = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
+                       "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
+    slim_parameters = {key: params[key] for key in slim_parameters}
 
-    recapitate_parameters = {
-        'pop_size_domestic_2': params["pop_size_domestic_2"],
-        'pop_size_wild_2': params["pop_size_wild_2"],
-        'div_time': params["div_time"],
-        'mig_rate_post_split': params["mig_rate_post_split"],
-        'mig_length_post_split': params["mig_length_post_split"],
-        'bottleneck_time_wild': params["bottleneck_time_wild"],
-        'bottleneck_strength_wild': params["bottleneck_strength_wild"],
-        'bottleneck_time_domestic': params["bottleneck_time_domestic"],
-        'bottleneck_strength_domestic': params["bottleneck_strength_domestic"],
-    }
+    recapitate_parameters = ["pop_size_domestic_2", "pop_size_wild_2", "div_time", "mig_rate_post_split",
+                             "mig_length_post_split", "bottleneck_time_wild", "bottleneck_strength_wild",
+                             "bottleneck_time_domestic", "bottleneck_strength_domestic"]
+    recapitate_parameters = {key: params[key] for key in recapitate_parameters}
 
     # Run model
     seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8)

@@ -46,8 +46,8 @@ def test_prior(df):
         assert np.all(df[pop] >= samp_size), "{} smaller than expected sample size {}".format(pop, samp_size)
 
     assert np.all(df[["captive_time", "mig_length_wild"]] < 500), "SLiM event scheduled > 500 generations ago"
-
-    mig_rates = df[["mig_rate_wild", "mig_rate_post_split"]]
+    
+    mig_rates = df[[col for col in list(df) if "mig_rate" in col]]
     assert np.all(mig_rates >= 0) & np.all(mig_rates <= 1)
 
     cond_1 = np.all(df[["div_time", "bottleneck_time_domestic", "bottleneck_time_wild"]] > 500)

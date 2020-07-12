@@ -13,6 +13,7 @@ slim_parameters = {
     'pop_size_domestic_1': 1000,  # Population sizes are diploid.
     'pop_size_wild_1': 1000,
     'pop_size_captive': 100,
+    'mig_rate_captive': 0.02,
     'mig_length_wild': 50,   # Generations in SLiM before migration begins
     'mig_rate_wild': 0.05,  # Rate of migration from domestic -> wildcats
     'captive_time': 50,          # Time captive population established in SLiM

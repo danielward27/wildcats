@@ -54,7 +54,7 @@ class WildcatSimulation:
         return filename
 
     def slim_command(self, pop_size_domestic_1, pop_size_wild_1, pop_size_captive,
-                     mig_length_wild, mig_rate_wild, captive_time,
+                     mig_rate_captive, mig_length_wild, mig_rate_wild, captive_time,
                      decap_trees_filename="../output/decap.trees",
                      slim_script_filename='slim_model.slim',
                      template_filename='slim_command_template.txt'):
@@ -76,6 +76,7 @@ class WildcatSimulation:
             'p_pop_size_captive': str(self._pop_size_captive),
             'p_length': str(self.seq_features.length),
             'p_recombination_rate': str(self.seq_features.recombination_rate),
+            'p_mig_rate_captive': str(mig_rate_captive),
             'p_mig_length_wild': str(mig_length_wild),
             'p_mig_rate_wild': str(mig_rate_wild),
             'p_captive_time': str(captive_time),

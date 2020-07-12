@@ -1,6 +1,6 @@
 // Note the following constants are defined using the command line:
 // pop_size_domestic_1, pop_size_wild_1, pop_size_captive, length,
-// recombination_rate, mig_length_wild, mig_rate_wild,
+// recombination_rate, mig_rate_captive, mig_length_wild, mig_rate_wild,
 // captive_time, random_seed
 
 initialize()
@@ -28,6 +28,7 @@ initialize()
 	}
 	if (sim.generation == forwards_cap_time){   // Captive population established at captive_time
 		sim.addSubpopSplit("p2", pop_size_captive, p1);
+		p2.setMigrationRates(p1, mig_rate_captive);
 	}
 }
 
