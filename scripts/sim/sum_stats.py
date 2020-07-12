@@ -246,7 +246,6 @@ def roh_stats(allel_genotypes, pos, pop_list, seq_length):
 def pca(genotypes_012, pop_list):
     """Patterson PCA of the genotypes. genotypes_012 is the scikit-allel 012 (alt_n) format. Returns df."""
     coords, model = allel.pca(genotypes_012, n_components=2, scaler='patterson')
-    print(coords)
     df = pd.DataFrame({"pc1": coords[:, 0],
                        "pc2": coords[:, 1],
                        "population": pop_list})

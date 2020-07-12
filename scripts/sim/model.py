@@ -54,7 +54,7 @@ class WildcatSimulation:
         return filename
 
     def slim_command(self, pop_size_domestic_1, pop_size_wild_1, pop_size_captive,
-                     migration_length_1, migration_rate_1, captive_time,
+                     mig_length_wild, mig_rate_wild, captive_time,
                      decap_trees_filename="../output/decap.trees",
                      slim_script_filename='slim_model.slim',
                      template_filename='slim_command_template.txt'):
@@ -76,8 +76,8 @@ class WildcatSimulation:
             'p_pop_size_captive': str(self._pop_size_captive),
             'p_length': str(self.seq_features.length),
             'p_recombination_rate': str(self.seq_features.recombination_rate),
-            'p_migration_length_1': str(migration_length_1),
-            'p_migration_rate_1': str(migration_rate_1),
+            'p_mig_length_wild': str(mig_length_wild),
+            'p_mig_rate_wild': str(mig_rate_wild),
             'p_captive_time': str(captive_time),
             'p_random_seed': str(self.random_seed),
             'p_slim_script_filename': slim_script_filename,
@@ -107,15 +107,15 @@ class WildcatSimulation:
         return tree_seq
 
     @staticmethod
-    def demographic_model(pop_size_domestic_2, pop_size_wild_2, div_time, migration_rate_2,
-                          migration_length_2, bottleneck_time_wild, bottleneck_strength_wild,
+    def demographic_model(pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
+                          mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
                           bottleneck_time_domestic, bottleneck_strength_domestic):
         """Model for recapitation, including bottlenecks, population size changes and migration.
         Returns list of demographic events sorted in time order. Note that if parameters are drawn from priors this
         could have unexpected consequences on the demography. sim.utils.test_prior() should mitigate this issue."""
         domestic, wild = 0, 1
 
-        migration_time_2 = div_time-migration_length_2
+        migration_time_2 = div_time-mig_length_post_split
 
         demographic_events = [
             msprime.PopulationParametersChange(time=bottleneck_time_domestic, initial_size=pop_size_domestic_2,
@@ -126,8 +126,8 @@ class WildcatSimulation:
                                                population_id=wild),
             msprime.InstantaneousBottleneck(time=bottleneck_time_wild, strength=bottleneck_strength_wild,
                                             population_id=wild),
-            msprime.MigrationRateChange(time=migration_time_2, rate=migration_rate_2, matrix_index=(domestic, wild)),
-            msprime.MigrationRateChange(time=migration_time_2, rate=migration_rate_2, matrix_index=(wild, domestic)),
+            msprime.MigrationRateChange(time=migration_time_2, rate=mig_rate_post_split, matrix_index=(domestic, wild)),
+            msprime.MigrationRateChange(time=migration_time_2, rate=mig_rate_post_split, matrix_index=(wild, domestic)),
             msprime.MassMigration(time=div_time, source=domestic, dest=wild, proportion=1)]
 
         demographic_events.sort(key=lambda event: event.time, reverse=False)  # Ensure time sorted (required by msprime)

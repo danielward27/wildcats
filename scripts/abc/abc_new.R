@@ -6,16 +6,18 @@ library(abc)
 prior = read.csv("../../output/prior.csv", )
 sum_stats = read.csv("../../output/summary_stats.csv")
 
+
+
 sprintf("Prior rows: %s sum_stats rows: %s", nrow(prior), nrow(sum_stats))
 shared_seeds = intersect(prior$random_seed, sum_stats$random_seed)
-prior$migration_length_1 = prior$migration_length_1
+prior$mig_length_wild = prior$mig_length_wild
 
 prior = prior[prior$random_seed %in% sum_stats$random_seed, ]
 sum_stats = sum_stats[sum_stats$random_seed %in% prior$random_seed, ]
 
 stopifnot(all(prior["random_seed"] == sum_stats["random_seed"]))
 
-table(prior$migration_length_1)
+table(prior$mig_length_wild)
 
 prior = dplyr::select(prior, -random_seed)
 sum_stats = dplyr::select(sum_stats, -random_seed)

@@ -15,7 +15,7 @@ end_index = start_index+runs_per_task
 
 prior_df = pd.read_feather("../output/prior.feather")
 
-float_col_names = ["migration_rate_1", "migration_rate_2"]
+float_col_names = ["mig_rate_wild", "mig_rate_post_split"]
 int_col_names = [x for x in list(prior_df) if x not in float_col_names]
 prior_df[int_col_names] = prior_df[int_col_names].astype(int)
 
@@ -27,8 +27,8 @@ for i in range(start_index, end_index):
         'pop_size_domestic_1': params["pop_size_domestic_1"],  # Population sizes are diploid.
         'pop_size_wild_1': params["pop_size_wild_1"],
         'pop_size_captive': params["pop_size_captive"],
-        'migration_length_1': params["migration_length_1"],
-        'migration_rate_1': params["migration_rate_1"],  # Rate of migration from domestic -> wildcats
+        'mig_length_wild': params["mig_length_wild"],
+        'mig_rate_wild': params["mig_rate_wild"],  # Rate of migration from domestic -> wildcats
         'captive_time': params["captive_time"],  # Time captive population established in SLiM
     }
 
@@ -36,8 +36,8 @@ for i in range(start_index, end_index):
         'pop_size_domestic_2': params["pop_size_domestic_2"],
         'pop_size_wild_2': params["pop_size_wild_2"],
         'div_time': params["div_time"],
-        'migration_rate_2': params["migration_rate_2"],
-        'migration_length_2': params["migration_length_2"],
+        'mig_rate_post_split': params["mig_rate_post_split"],
+        'mig_length_post_split': params["mig_length_post_split"],
         'bottleneck_time_wild': params["bottleneck_time_wild"],
         'bottleneck_strength_wild': params["bottleneck_strength_wild"],
         'bottleneck_time_domestic': params["bottleneck_time_domestic"],

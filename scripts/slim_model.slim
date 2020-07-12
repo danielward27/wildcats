@@ -1,6 +1,6 @@
 // Note the following constants are defined using the command line:
 // pop_size_domestic_1, pop_size_wild_1, pop_size_captive, length,
-// recombination_rate, migration_length_1, migration_rate_1, 
+// recombination_rate, mig_length_wild, mig_rate_wild,
 // captive_time, random_seed
 
 initialize()
@@ -13,7 +13,7 @@ initialize()
 	initializeGenomicElement(g1, 0, (length-1)); // msprime adds one base
 	
 	// Convert parameters to forwards in time used by SLiM	
-	defineConstant("forwards_mig_time", 500-migration_length_1);
+	defineConstant("forwards_mig_time", 500-mig_length_wild);
 	defineConstant("forwards_cap_time", 500-captive_time);
 }
 
@@ -24,7 +24,7 @@ initialize()
 
 1: {
 	if (sim.generation >= forwards_mig_time){
-		p1.setMigrationRates(p0, migration_rate_1); // set migration rates from domestic cats (p0) into wild-living population (p1).
+		p1.setMigrationRates(p0, mig_rate_wild); // set migration rates from domestic cats (p0) into wild-living population (p1).
 	}
 	if (sim.generation == forwards_cap_time){   // Captive population established at captive_time
 		sim.addSubpopSplit("p2", pop_size_captive, p1);
