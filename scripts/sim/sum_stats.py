@@ -89,16 +89,37 @@ def tskit_stats(tree_seq, sampled_nodes):
     return tskit_stats
 
 
-def afs_stats(tree_seq, sampled_nodes):
-    """Calculates the median and interquartile range of the afs
-    for each population, and the populations combined. Returns a dictionary"""
+def afs_stats(tree_seq, sampled_nodes, bin_no=4):
+    """Calculates bins of the allele frequency spectrum for each population,
+    and the populations combined. Returns a dictionary.
+
+    Arguments
+    -----------
+    tree_seq: tskit.TreeSequence
+    sampled_nodes: dictionary of populations and associated sampled nodes list
+    bin_no: Number of bins. Bins are then made of (approximately) constant size over frequency spectrum.
+    """
     afs_stats = {}
-    functions = [np.median, iqr]
     for pop, samples in sampled_nodes.items():
         afs = tree_seq.allele_frequency_spectrum(sample_sets=[samples], span_normalise=False)
-        for func in functions:
-            key = pop + "_afs_" + func.__name__
-            afs_stats[key] = func(afs)
+
+        # Drop index 0 (monomorphic sites) and trailing zeros (where "MAF" > 0.5)
+        afs = afs[1:int(len(samples) / 2) + 1]
+
+        if bin_no > len(afs):
+            raise ValueError("bin_no is greater than len(afs), try decreasing bin_no.")
+
+        split_afs = np.array_split(afs, bin_no)
+        bin_means = [array.mean() for array in split_afs]
+
+        labels = []
+        idx = 1
+        for array in split_afs:
+            labels.append("{}_afs_mean_{}_{}".format(pop, idx, idx + len(array) - 1))
+            idx += len(array)
+
+        pop_stats = dict(zip(labels, bin_means))
+        afs_stats = {**afs_stats, **pop_stats}
 
     return afs_stats
 
