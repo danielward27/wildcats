@@ -4,7 +4,7 @@
 
 Scottish wildcats have undergone extensive hybridisation with domestic cats. This hybridisation has become so extensive that Scottish wildcats are at risk of being "swamped" by the domestic cats, effectively making the Scottish wildcats extinct.
 
-My masters project involves using Approximate Bayesian Computation to better understand wildcat evolution and hybridisation with the domestic cat. Approximate Bayesian Computation is a likelihood-free method of inference that relies on simulating datasets with parameter values drawn from priors. The distance between the simulated datasets and an observed dataset is used to estimate the posterior distribution of parameter values. Summary statistics are used for these distance comparisons to improve computational efficiency.
+This project involves using Approximate Bayesian Computation to better understand wildcat evolution and hybridisation with the domestic cat. Approximate Bayesian Computation is a likelihood-free method of inference that relies on simulating datasets with parameter values drawn from priors. The distance between the simulated datasets and an observed dataset is used to estimate the posterior distribution of parameter values. Summary statistics are used for these distance comparisons to improve computational efficiency.
 
 ### The model of wildcat evolution
 

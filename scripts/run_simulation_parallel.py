@@ -15,7 +15,7 @@ end_index = start_index+runs_per_task
 
 prior_df = pd.read_feather("../output/prior.feather")
 
-float_col_names = ["mig_rate_wild", "mig_rate_post_split"]
+float_col_names = [col for col in list(prior_df) if "mig_rate" in col]
 int_col_names = [x for x in list(prior_df) if x not in float_col_names]
 prior_df[int_col_names] = prior_df[int_col_names].astype(int)
 
