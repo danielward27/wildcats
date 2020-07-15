@@ -6,18 +6,13 @@ library(abc)
 prior = read.csv("../../output/prior.csv", )
 sum_stats = read.csv("../../output/summary_stats.csv")
 
-
-
 sprintf("Prior rows: %s sum_stats rows: %s", nrow(prior), nrow(sum_stats))
-shared_seeds = intersect(prior$random_seed, sum_stats$random_seed)
-prior$mig_length_wild = prior$mig_length_wild
-
 prior = prior[prior$random_seed %in% sum_stats$random_seed, ]
 sum_stats = sum_stats[sum_stats$random_seed %in% prior$random_seed, ]
 
 stopifnot(all(prior["random_seed"] == sum_stats["random_seed"]))
 
-table(prior$mig_length_wild)
+table(is.na(sum_stats))
 
 prior = dplyr::select(prior, -random_seed)
 sum_stats = dplyr::select(sum_stats, -random_seed)
@@ -25,7 +20,7 @@ sum_stats = dplyr::select(sum_stats, -random_seed)
 start_time <- Sys.time()
 tol = 0.01
 res = cv4abc(param = data.frame(prior), sumstat = data.frame(sum_stats),
-       nval = 500, method = "ridge", tols = tol)
+   nval = 200, method = "ridge", tols = tol)
 end_time <- Sys.time()
 
 start_time-end_time
@@ -56,8 +51,8 @@ remove_outliers = function(x,threshold=2, na.rm = TRUE, ...) {
 df
 
 df_no_outliers = df %>% group_by(parameter) %>%
-  mutate(pseudo_observed = remove_outliers(pseudo_observed, threshold = 6),
-         predicted = remove_outliers(predicted, threshold = 6))
+  mutate(pseudo_observed = remove_outliers(pseudo_observed, threshold = 10),
+         predicted = remove_outliers(predicted, threshold = 10))
   
 
 p = df_no_outliers %>%
@@ -69,5 +64,5 @@ p = df_no_outliers %>%
 p
 
 
-#ggsave("../../plots/goodness_of_fit/with_migration_1_added_and0001_GOF.png", p,
+ggsave("../../plots/goodness_of_fit/3_migs_ridge.png", p,
        height = 8, width = 12, units = "in")

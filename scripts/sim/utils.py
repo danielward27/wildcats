@@ -17,7 +17,6 @@ def merge_sum_stats(num_files):
 
     sum_stats = pd.concat(df_list, axis=0).reset_index(drop=True)
     sum_stats = sum_stats.sort_values(by="random_seed")
-    sum_stats = sum_stats.drop(columns="all_pops_afs_median")  # Had all zeros - not too sure why?
 
     # Check everything looks right
     seeds = sum_stats["random_seed"]
