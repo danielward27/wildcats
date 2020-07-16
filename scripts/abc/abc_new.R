@@ -20,7 +20,7 @@ sum_stats = dplyr::select(sum_stats, -random_seed)
 start_time <- Sys.time()
 tol = 0.01
 res = cv4abc(param = data.frame(prior), sumstat = data.frame(sum_stats),
-   nval = 200, method = "ridge", tols = tol)
+   nval = 200, method = "neuralnet", tols = tol, numnet = 20, sizenet = 50)
 end_time <- Sys.time()
 
 start_time-end_time
@@ -48,21 +48,35 @@ remove_outliers = function(x,threshold=2, na.rm = TRUE, ...) {
   y[x > (qnt[2] + H)] = NA
   y
 }
-df
 
 df_no_outliers = df %>% group_by(parameter) %>%
   mutate(pseudo_observed = remove_outliers(pseudo_observed, threshold = 10),
          predicted = remove_outliers(predicted, threshold = 10))
   
-
-p = df_no_outliers %>%
+p1 = df %>%
   ggplot(aes(x=pseudo_observed, y=predicted)) +
   facet_wrap(~parameter, scales = "free") +
   geom_point(size=0.7) +
   geom_abline(colour="red")
 
-p
+p1
+
+#ggsave("../../plots/goodness_of_fit/3_migs_ridge.png", p,
+#       height = 8, width = 12, units = "in")
 
 
-ggsave("../../plots/goodness_of_fit/3_migs_ridge.png", p,
-       height = 8, width = 12, units = "in")
+# mig_length_post_split was not inferred well
+# Does it effect div_time inference though?
+p2 = df %>%
+  filter(parameter %in% c("div_time", "mig_length_post_split")) %>%
+  mutate(residual = predicted-pseudo_observed) %>%
+  pivot_wider(id_cols = pod_index, names_from = parameter,
+              values_from = c("pseudo_observed", "predicted", "residual")) %>%
+  ggplot(aes(pseudo_observed_mig_length_post_split, residual_div_time)) +
+  geom_point() +
+  geom_smooth(method="lm")
+
+p2
+
+#ggsave("../../plots/goodness_of_fit/mig_length_post_split_residual_div_time.png", p,
+#       height = 8, width = 12, units = "in")

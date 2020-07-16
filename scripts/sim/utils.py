@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import msprime
+import tskit
 from pyarrow.lib import ArrowIOError
 
 def merge_sum_stats(num_files):
@@ -58,3 +60,15 @@ def test_prior(df):
 
     print("Looks good!")
 
+def test_adding_seq_errors():
+    """A sanity check to make sure method of adding sequencing errors works as expected,
+    i.e. mutations are added above only sample nodes in the tree sequence"""
+    tree_seq = msprime.simulate(sample_size=50, Ne=1000, length=10e3, mutation_rate=0, random_seed=20,
+                                recombination_rate=6e-8)
+    # Add sequencing errors
+    tree_seq = msprime.mutate(tree_seq, rate=1e-2, keep=True, end_time=1, start_time=0)
+    for site in tree_seq.sites():
+        for mutation in site.mutations:
+            assert mutation.node in tree_seq.get_samples()
+    print("{} mutations added only above sample nodes".format(tree_seq.num_mutations))
+    print("Expected ~{} mutations".format(50*10e3*1e-2))

@@ -345,14 +345,15 @@ def maf_filter(allel_genotypes, pos, threshold=1, verbosity=0):
     return genotypes, pos
 
 
-def ld_prune(genotypes_012, pos, size=100, step=20, threshold=0.1):
+def ld_prune(genotypes_012, pos, size=100, step=20, threshold=0.1, verbosity=0):
     """Carries out ld pruning"""
     loc_unlinked = allel.locate_unlinked(genotypes_012, size=size,
                                          step=step, threshold=threshold)
     n = np.count_nonzero(loc_unlinked)
     genotypes = genotypes_012.compress(loc_unlinked, axis=0)
     pos = pos[loc_unlinked]
-    print("ld_prune: Retaining: {}  out of {} variants".format(n, genotypes_012.shape[0]))
+    if verbosity > 0:
+        print("ld_prune: Retaining: {}  out of {} variants".format(n, genotypes_012.shape[0]))
     return genotypes, pos
 
 

@@ -15,7 +15,7 @@ end_index = start_index+runs_per_task
 
 prior_df = pd.read_feather("../output/prior.feather")
 
-float_col_names = [col for col in list(prior_df) if "mig_rate" in col]
+float_col_names = [col for col in list(prior_df) if "rate" in col]
 int_col_names = [x for x in list(prior_df) if x not in float_col_names]
 prior_df[int_col_names] = prior_df[int_col_names].astype(int)
 
@@ -30,10 +30,13 @@ for i in range(start_index, end_index):
     recapitate_parameters = ["pop_size_domestic_2", "pop_size_wild_2", "div_time", "mig_rate_post_split",
                              "mig_length_post_split", "bottleneck_time_wild", "bottleneck_strength_wild",
                              "bottleneck_time_domestic", "bottleneck_strength_domestic"]
+
     recapitate_parameters = {key: params[key] for key in recapitate_parameters}
 
     # Run model
-    seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8)
+    seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8,
+                               mutation_rate=6e-8, error_rate=params["seq_error_rate"])
+
     print("Warning: Simulating a 10 Mb region only!")
     sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
     command = sim.slim_command(**slim_parameters)
@@ -41,7 +44,7 @@ for i in range(start_index, end_index):
     try:         # Just to make sure results end up being NA instead of breaking the run.
         decap_trees = sim.run_slim(command)
         demographic_events = sim.demographic_model(**recapitate_parameters)
-        tree_seq = sim.recapitate(decap_trees, demographic_events)
+        tree_seq = sim.recapitate(decap_trees, demographic_events, add_seq_errors=True)
 
     except Exception:
         print("The simulation failed to run on parameter index {}".format(i))

@@ -23,6 +23,7 @@ class SeqFeatures:
     length: int         # Length of sequence to simulate in base pairs.
     recombination_rate: float = 2e-8  # Recombination rate per base pair.
     mutation_rate: float = 6.7e-8     # Mutation rate per base pair.
+    error_rate: float = 0
 
 
 class WildcatSimulation:
@@ -134,8 +135,9 @@ class WildcatSimulation:
         demographic_events.sort(key=lambda event: event.time, reverse=False)  # Ensure time sorted (required by msprime)
         return demographic_events
 
-    def recapitate(self, decap_trees, demographic_events, demography_debugger=False):
-        """Recapitates tree sequence under model specified by demographic events. Returns tskit.tree_sequence."""
+    def recapitate(self, decap_trees, demographic_events, add_seq_errors, demography_debugger=False):
+        """Recapitates tree sequence under model specified by demographic events.
+        Adds mutations and sequencing errors if add_seq_errors is True. Returns tskit.tree_sequence."""
         population_configurations = [
             msprime.PopulationConfiguration(initial_size=self._pop_size_domestic_1),  # msprime uses diploid Ne
             msprime.PopulationConfiguration(initial_size=self._pop_size_wild_1),
@@ -145,8 +147,17 @@ class WildcatSimulation:
                                           population_configurations=population_configurations,
                                           demographic_events=demographic_events, random_seed=self.random_seed)
 
+        # Overlay mutations
         tree_seq = pyslim.SlimTreeSequence(msprime.mutate(tree_seq, rate=self.seq_features.mutation_rate,
                                                           random_seed=self.random_seed))
+
+        # Add sequencing errors
+        if add_seq_errors:
+            tree_seq = pyslim.SlimTreeSequence(
+                msprime.mutate(tree_seq, rate=self.seq_features.error_rate, random_seed=self.random_seed,
+                               keep=True, start_time=0, end_time=1)
+            )
+
         tree_seq = tree_seq.simplify()
 
         if demography_debugger:
