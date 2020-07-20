@@ -20,7 +20,7 @@ sum_stats = dplyr::select(sum_stats, -random_seed)
 start_time <- Sys.time()
 tol = 0.01
 res = cv4abc(param = data.frame(prior), sumstat = data.frame(sum_stats),
-   nval = 200, method = "neuralnet", tols = tol, numnet = 20, sizenet = 50)
+   nval = 200, method = "ridge", tols = tol, statistic = "mean")
 end_time <- Sys.time()
 
 start_time-end_time
@@ -38,6 +38,9 @@ y = data.frame(res$true) %>%
 
 df = full_join(y, y_hat, by=c("parameter", "pod_index"))
 
+### CORPLOT
+
+
 
 remove_outliers = function(x,threshold=2, na.rm = TRUE, ...) {
   # threshold: float denoting how many iqr above and below the upper and lower quartiles to accept
@@ -53,7 +56,7 @@ df_no_outliers = df %>% group_by(parameter) %>%
   mutate(pseudo_observed = remove_outliers(pseudo_observed, threshold = 10),
          predicted = remove_outliers(predicted, threshold = 10))
   
-p1 = df %>%
+p1 = df_no_outliers %>%
   ggplot(aes(x=pseudo_observed, y=predicted)) +
   facet_wrap(~parameter, scales = "free") +
   geom_point(size=0.7) +

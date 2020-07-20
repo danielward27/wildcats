@@ -45,7 +45,7 @@ for key, d in dist.items():
     plt.savefig("../plots/prior/{}.png".format(key))
     plt.clf()
 
-float_col_names = [col for col in list(df) if "mig_rate" in col]
+float_col_names = [col for col in list(df) if "rate" in col]
 int_col_names = [x for x in list(df) if x not in float_col_names]
 df[int_col_names] = df[int_col_names].round().astype(int)
 

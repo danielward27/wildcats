@@ -1,17 +1,26 @@
 import pandas as pd
 import numpy as np
 import msprime
-import tskit
 from pyarrow.lib import ArrowIOError
 
-def merge_sum_stats(num_files):
+
+def merge_sum_stats(num_files, filename, output_filename):
+    """Merges 0 indexed incrementally numbered summary statistic feather files,
+    into a single csv file.
+
+    Parameters
+    --------------
+    num_files: number of files to merge
+    filename: filepath to .feather files, number replaced with {}.
+    output_filename: output csv filename.
+    """
     df_list = []
     missing_files = []
 
     for i in range(0, num_files):
-        filename = "../output/summary_stats/summary_stats_{}.feather".format(i)
+        file = filename.format(i)
         try:
-            df = pd.read_feather(filename)
+            df = pd.read_feather(file)
             df = df.reset_index(drop=True)
             df_list.append(df)
         except ArrowIOError:
@@ -22,8 +31,7 @@ def merge_sum_stats(num_files):
 
     # Check everything looks right
     seeds = sum_stats["random_seed"]
-
-    difs = np.setdiff1d(np.arange(1,len(sum_stats)), np.array(seeds))
+    difs = np.setdiff1d(np.arange(1, len(sum_stats)), np.array(seeds))
 
     if len(missing_files) != 0:
         print("Warning: there are {} files missing in specified range".format(len(missing_files)))
@@ -33,11 +41,13 @@ def merge_sum_stats(num_files):
     if len(difs) != 0:
         print("Warning: np.setdiff1d suggests missing seeds")
 
-    sum_stats.to_csv("../output/summary_stats.csv", index=False)
+    sum_stats.to_csv(output_filename, index=False)
 
+
+# merge_sum_stats(500, "../../output/summary_stats/summary_stats_{}.feather", "../../output/summary_stats.csv")
 
 def test_prior(df):
-    """Basic tests to unsure prior not malformed"""
+    """Basic tests to ensure prior not malformed"""
     assert np.all(df >= 0), "Unexpected negative values in prior_df"
 
     # Check min pop_sizes are > sample sizes
@@ -59,6 +69,7 @@ def test_prior(df):
     assert cond_3, "Bottleneck scheduled to occur before divergence"
 
     print("Looks good!")
+
 
 def test_adding_seq_errors():
     """A sanity check to make sure method of adding sequencing errors works as expected,

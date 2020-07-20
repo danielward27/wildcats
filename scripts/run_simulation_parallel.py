@@ -8,8 +8,7 @@ import os
 start_time = time.time()
 
 array_id = int(os.environ['PBS_ARRAYID'])
-
-runs_per_task = 200    # Jobs in an array are referred to as tasks
+runs_per_task = 200  # Jobs in an array are referred to as tasks
 start_index = array_id*runs_per_task
 end_index = start_index+runs_per_task
 
@@ -41,14 +40,9 @@ for i in range(start_index, end_index):
     sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
     command = sim.slim_command(**slim_parameters)
 
-    try:         # Just to make sure results end up being NA instead of breaking the run.
-        decap_trees = sim.run_slim(command)
-        demographic_events = sim.demographic_model(**recapitate_parameters)
-        tree_seq = sim.recapitate(decap_trees, demographic_events, add_seq_errors=True)
-
-    except Exception:
-        print("The simulation failed to run on parameter index {}".format(i))
-        continue  # If something goes wrong go to next iteration (row will be np.nan)
+    decap_trees = sim.run_slim(command)
+    demographic_events = sim.demographic_model(**recapitate_parameters)
+    tree_seq = sim.recapitate(decap_trees, demographic_events, add_seq_errors=True)
 
     # Take a sample of individuals
     samples = sim.sample_nodes(tree_seq, [5, 30, 10])

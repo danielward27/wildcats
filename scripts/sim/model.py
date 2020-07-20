@@ -98,6 +98,7 @@ class WildcatSimulation:
     def run_slim(self, command):
         """Runs SLiM simulation from command line to get the decapitated tree sequence."""
         command_f = self.add_suffix("_temporary_command.txt")
+        print(command_f)
 
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
