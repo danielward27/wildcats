@@ -1,8 +1,10 @@
 from sim.model import WildcatSimulation, SeqFeatures
 import sim.sum_stats as ss
+import sim.utils as utils
 import time
 import pandas as pd
 import numpy as np
+
 import os
 
 start_time = time.time()
@@ -14,38 +16,29 @@ end_index = start_index+runs_per_task
 
 prior_df = pd.read_feather("../output/prior.feather")
 
-float_col_names = [col for col in list(prior_df) if "rate" in col]
-int_col_names = [x for x in list(prior_df) if x not in float_col_names]
+int_col_names = [col for col in list(prior_df) if "rate" not in col]
+
 prior_df[int_col_names] = prior_df[int_col_names].astype(int)
 
 # Run the model runs_per_task times
 for i in range(start_index, end_index):
     params = prior_df.astype(object).iloc[i].to_dict()  # Row of parameters
-
-    slim_parameters = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
-                       "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
-    slim_parameters = {key: params[key] for key in slim_parameters}
-
-    recapitate_parameters = ["pop_size_domestic_2", "pop_size_wild_2", "div_time", "mig_rate_post_split",
-                             "mig_length_post_split", "bottleneck_time_wild", "bottleneck_strength_wild",
-                             "bottleneck_time_domestic", "bottleneck_strength_domestic"]
-
-    recapitate_parameters = {key: params[key] for key in recapitate_parameters}
-
-    # Run model
-    seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8,
-                               mutation_rate=6e-8, error_rate=params["seq_error_rate"])
-
     print("Warning: Simulating a 10 Mb region only!")
-    sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
-    command = sim.slim_command(**slim_parameters)
 
-    decap_trees = sim.run_slim(command)
-    demographic_events = sim.demographic_model(**recapitate_parameters)
-    tree_seq = sim.recapitate(decap_trees, demographic_events, add_seq_errors=True)
+    seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8)
+    wild_sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
+
+    # Subset parameters based on function arguments
+    slim_parameters = utils.get_params(params, WildcatSimulation.slim_command)
+    recapitate_parameters = utils.get_params(params, WildcatSimulation.demographic_model)
+
+    command = wild_sim.slim_command(**slim_parameters)
+    decap_trees = wild_sim.run_slim(command)
+    demographic_events = wild_sim.demographic_model(**recapitate_parameters)
+    tree_seq = wild_sim.recapitate(decap_trees, demographic_events)
 
     # Take a sample of individuals
-    samples = sim.sample_nodes(tree_seq, [5, 30, 10])
+    samples = wild_sim.sample_nodes(tree_seq, [5, 30, 10])
     tree_seq = tree_seq.simplify(samples=np.concatenate(samples))
     genotypes = ss.genotypes(tree_seq)
     pos = ss.positions(tree_seq)
@@ -69,7 +62,7 @@ for i in range(start_index, end_index):
         pca_pipeline(genotypes, pos, pop_list),
     ]
 
-    stats_dict = {"random_seed": sim.random_seed}  # Random seed acts as ID
+    stats_dict = {"random_seed": wild_sim.random_seed}  # Random seed acts as ID
 
     for func in summary_functions:
         try:
@@ -87,6 +80,7 @@ for i in range(start_index, end_index):
             stats_df.loc[i, col] = value
 
 stats_df = stats_df.reset_index(drop=True)
+
 output_filepath = "../output/summary_stats/summary_stats_{}.feather".format(array_id)
 stats_df.to_feather(output_filepath)
 

@@ -3,14 +3,15 @@ import numpy as np
 import pandas as pd
 import allel
 import tskit
-from sim.model import individuals_df
+import sim.model
+
 
 
 def sampled_nodes(tree_seq):
     """Gets a dictionary of all the nodes in the tree sequence. Individuals'
     nodes are kept adjacent, unlike the built in tree_seq.samples(population ={}).
     Returns: dict containing node indices for each population"""
-    ind_df = individuals_df(tree_seq)
+    ind_df = sim.model.individuals_df(tree_seq)
     sampled_nodes = {
         "domestic": [],
         "wild": [],

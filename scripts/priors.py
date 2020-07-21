@@ -26,7 +26,7 @@ dist = {
     "mig_length_post_split": ss.uniform(0, 10000),
     "mig_rate_post_split": ss.truncnorm(0, 1, scale=0.1),
     "div_time": ss.norm(40000, 5000),
-    "seq_error_rate": ss.uniform(0, 1e-7),
+    # "error_rate": ss.uniform(0, 1e-7),
 }
 
 runs = 200000

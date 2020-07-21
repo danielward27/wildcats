@@ -12,18 +12,19 @@ import msprime
 import numpy as np
 import pandas as pd
 import pyslim
-from subprocess import run
+import subprocess
 import os
 from dataclasses import dataclass
-
+import sim.sum_stats as ss
+import sim.utils as utils
 
 @dataclass
 class SeqFeatures:
     """Contains the fixed parameters in the model relating to the features of the sequence simulated"""
     length: int         # Length of sequence to simulate in base pairs.
-    recombination_rate: float = 2e-8  # Recombination rate per base pair.
-    mutation_rate: float = 6.7e-8     # Mutation rate per base pair.
-    error_rate: float = 0
+    recombination_rate: float  # Recombination rate per base pair.
+    mutation_rate: float     # Mutation rate per base pair.
+    error_rate: float = 0  # Error rate (adds "mutations" per bp)
 
 
 class WildcatSimulation:
@@ -72,16 +73,16 @@ class WildcatSimulation:
             self._decap_trees_filename = decap_trees_filename
 
         replacements_dict = {
-            'p_pop_size_domestic_1': str(self._pop_size_domestic_1),  # Placeholders prefixed with p_ in template
-            'p_pop_size_wild_1': str(self._pop_size_wild_1),
-            'p_pop_size_captive': str(self._pop_size_captive),
-            'p_length': str(self.seq_features.length),
+            'p_pop_size_domestic_1': str(int(self._pop_size_domestic_1)),  # Placeholders prefixed with p_ in template
+            'p_pop_size_wild_1': str(int(self._pop_size_wild_1)),
+            'p_pop_size_captive': str(int(self._pop_size_captive)),
+            'p_length': str(int(self.seq_features.length)),
             'p_recombination_rate': str(self.seq_features.recombination_rate),
             'p_mig_rate_captive': str(mig_rate_captive),
-            'p_mig_length_wild': str(mig_length_wild),
+            'p_mig_length_wild': str(int(mig_length_wild)),
             'p_mig_rate_wild': str(mig_rate_wild),
-            'p_captive_time': str(captive_time),
-            'p_random_seed': str(self.random_seed),
+            'p_captive_time': str(int(captive_time)),
+            'p_random_seed': str(int(self.random_seed)),
             'p_slim_script_filename': slim_script_filename,
             'p_decap_trees_filename': self._decap_trees_filename,
         }
@@ -98,11 +99,11 @@ class WildcatSimulation:
     def run_slim(self, command):
         """Runs SLiM simulation from command line to get the decapitated tree sequence."""
         command_f = self.add_suffix("_temporary_command.txt")
-        print(command_f)
 
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
-        run(['bash', command_f])
+        subprocess.run(['bash', command_f], stdout=subprocess.PIPE,  # See https://bit.ly/3fMIWcE
+                       stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
         tree_seq = pyslim.load(self._decap_trees_filename)
         os.remove(command_f)  # No need to keep the command file (can always print to standard out)
         os.remove(self._decap_trees_filename)  # We will delete the decapitated trees (don't need them).
@@ -136,9 +137,9 @@ class WildcatSimulation:
         demographic_events.sort(key=lambda event: event.time, reverse=False)  # Ensure time sorted (required by msprime)
         return demographic_events
 
-    def recapitate(self, decap_trees, demographic_events, add_seq_errors, demography_debugger=False):
+    def recapitate(self, decap_trees, demographic_events, demography_debugger=False):
         """Recapitates tree sequence under model specified by demographic events.
-        Adds mutations and sequencing errors if add_seq_errors is True. Returns tskit.tree_sequence."""
+        Adds mutations and sequencing errors. Returns tskit.tree_sequence."""
         population_configurations = [
             msprime.PopulationConfiguration(initial_size=self._pop_size_domestic_1),  # msprime uses diploid Ne
             msprime.PopulationConfiguration(initial_size=self._pop_size_wild_1),
@@ -153,7 +154,7 @@ class WildcatSimulation:
                                                           random_seed=self.random_seed))
 
         # Add sequencing errors
-        if add_seq_errors:
+        if self.seq_features.error_rate != 0:
             tree_seq = pyslim.SlimTreeSequence(
                 msprime.mutate(tree_seq, rate=self.seq_features.error_rate, random_seed=self.random_seed,
                                keep=True, start_time=0, end_time=1)
@@ -217,3 +218,80 @@ def tree_summary(tree_seq):
     print("Number of populations: {}".format(tree_seq.num_populations))
     print("Number of variants: {}".format(tree_seq.num_mutations))
     print("Sequence length: {}".format(tree_seq.sequence_length))
+
+
+def run_sim(param_vec):
+    """ I know this is a horrendous function but easyABC (R package) requires a function that does
+    params -> summary stats, so that is what it does. Runs with no sequencing errors.
+    parameters
+    --------------
+    param_vec: list of parameter values corresponding to the following parameter keys:
+        ["random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
+         "mig_rate_captive", "mig_length_wild", "mig_rate_wild",  "pop_size_domestic_2",
+         "pop_size_wild_2", "div_time", "mig_rate_post_split", "mig_length_post_split",
+         "bottleneck_time_domestic", "bottleneck_strength_domestic", "seq_length",
+         "bottleneck_time_wild", "bottleneck_strength_wild", "recombination_rate", "mutation_rate"]
+    """
+
+    param_keys = ["random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
+                  "mig_rate_captive", "mig_length_wild", "mig_rate_wild",  "pop_size_domestic_2",
+                  "pop_size_wild_2", "div_time", "mig_rate_post_split", "mig_length_post_split",
+                  "bottleneck_time_domestic", "bottleneck_strength_domestic", "bottleneck_time_wild",
+                  "bottleneck_strength_wild", "seq_length", "recombination_rate", "mutation_rate"]
+    params = dict(zip(param_keys, param_vec))
+
+    int_param_names = [name for name in param_keys if "rate" not in name]
+    for key, val in params.items():
+        if key in int_param_names:
+            params[key] = int(params[key])
+
+    # Subset parameters based on function arguments
+    slim_parameters = utils.get_params(params, WildcatSimulation.slim_command)
+    recapitate_parameters = utils.get_params(params, WildcatSimulation.demographic_model)
+
+    seq_features = SeqFeatures(params["seq_length"], params["recombination_rate"], params["mutation_rate"])
+    sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
+    command = sim.slim_command(**slim_parameters)
+    decap_trees = sim.run_slim(command)
+
+    demographic_events = sim.demographic_model(**recapitate_parameters)
+    tree_seq = sim.recapitate(decap_trees, demographic_events)
+
+    # Take a sample of individuals
+    samples = sim.sample_nodes(tree_seq, [5, 30, 10])
+    tree_seq = tree_seq.simplify(samples=np.concatenate(samples))
+    genotypes = ss.genotypes(tree_seq)
+    pos = ss.positions(tree_seq)
+    pop_list = ss.pop_list(tree_seq)
+    samples = ss.sampled_nodes(tree_seq)
+
+    # Calculate summary statistics
+    def pca_pipeline(genotypes, pos, pop_list):
+        genotypes, pos = ss.maf_filter(genotypes, pos)
+        genotypes = genotypes.to_n_alt()  # 012 with ind as cols
+        genotypes, pos = ss.ld_prune(genotypes, pos)
+        pca_stats = ss.pca_stats(genotypes, pop_list)
+        return pca_stats
+
+    summary_functions = [
+        ss.tskit_stats(tree_seq, samples),
+        ss.afs_stats(tree_seq, samples),
+        ss.r2_stats(tree_seq, samples, [0, 1e6, 2e6, 4e6], labels=["0_1Mb", "1_2Mb", "2_4MB"]),
+        ss.roh_stats(genotypes, pos, pop_list, seq_features.length),
+        pca_pipeline(genotypes, pos, pop_list),
+    ]
+
+    stats_dict = {"random_seed": sim.random_seed}  # Random seed acts as ID
+
+    for func in summary_functions:
+        try:
+            stat = func
+        except Exception:
+            print("The function {} threw an error".format(func.__name__))
+            stat = {}
+        stats_dict = {**stats_dict, **stat}
+
+    print("The summary statistics calculated are:\n"
+          "{}".format(stats_dict.keys()))
+
+    return list(stats_dict.values())

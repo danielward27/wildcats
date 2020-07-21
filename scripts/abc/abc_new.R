@@ -83,3 +83,13 @@ p2
 
 #ggsave("../../plots/goodness_of_fit/mig_length_post_split_residual_div_time.png", p,
 #       height = 8, width = 12, units = "in")
+df
+
+corr = df %>%
+  dplyr::select(-pseudo_observed) %>%
+  pivot_wider(id_cols = pod_index, names_from = parameter,
+              values_from = c("predicted")) %>%
+  dplyr::select(-pod_index) %>%
+  cor()
+
+corrplot::corrplot(corr, method = "square", tl.col = "black")

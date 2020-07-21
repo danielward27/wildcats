@@ -7,7 +7,7 @@ import tskit
 
 start_time = time.time()
 
-seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8, error_rate=5e-7)
+seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8)
 
 slim_parameters = {
     'pop_size_domestic_1': 1000,  # Population sizes are diploid.
@@ -32,12 +32,11 @@ recapitate_parameters = {
 }
 
 # Run model
-sim = WildcatSimulation(seq_features, random_seed=2)
-command = sim.slim_command(**slim_parameters)
-decap_trees = sim.run_slim(command)
-demographic_events = sim.demographic_model(**recapitate_parameters)
-tree_seq = sim.recapitate(decap_trees, demographic_events,
-                          add_seq_errors=True, demography_debugger=True)
+wild_sim = WildcatSimulation(seq_features, random_seed=2)
+command = wild_sim.slim_command(**slim_parameters)
+decap_trees = wild_sim.run_slim(command)
+demographic_events = wild_sim.demographic_model(**recapitate_parameters)
+tree_seq = wild_sim.recapitate(decap_trees, demographic_events, demography_debugger=True)
 
 # Print out useful bits and bobs
 print(tree_summary(tree_seq))

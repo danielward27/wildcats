@@ -83,3 +83,9 @@ def test_adding_seq_errors():
             assert mutation.node in tree_seq.get_samples()
     print("{} mutations added only above sample nodes".format(tree_seq.num_mutations))
     print("Expected ~{} mutations".format(50*10e3*1e-2))
+
+
+def get_params(dictionary, function):
+    """Filters dictionary using argument names from a function"""
+    return {key: param for key, param in dictionary.items()
+            if key in function.__code__.co_varnames}
