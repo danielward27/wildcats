@@ -55,45 +55,37 @@ class WildcatSimulation:
         filename = "{}_{}{}".format(filename[:dot_index], self.random_seed, filename[dot_index:])
         return filename
 
-    def slim_command(self, pop_size_domestic_1, pop_size_wild_1, pop_size_captive,
-                     mig_rate_captive, mig_length_wild, mig_rate_wild, captive_time,
+    def slim_command(self, param_dict,
                      decap_trees_filename="../output/decap.trees",
-                     slim_script_filename='slim_model.slim',
-                     template_filename='slim_command_template.txt'):
+                     slim_script_filename='slim_model.slim'):
         """Uses a template slim command text file and replaces placeholders
-        with parameter values to get a runnable command. Returns str."""
-
-        self._pop_size_domestic_1 = pop_size_domestic_1
-        self._pop_size_wild_1 = pop_size_wild_1
-        self._pop_size_captive = pop_size_captive
+        with parameter values to get a runnable command. Returns str.
+                pop_size_domestic_1, pop_size_wild_1, pop_size_captive,
+                     mig_rate_captive, mig_length_wild, mig_rate_wild, captive_time,
+        TODO: correct description
+        """
+        param_dict2 = param_dict.copy()  # Avoid mutating original dictionary
+        self._pop_size_domestic_1 = param_dict2["pop_size_domestic_1"]
+        self._pop_size_wild_1 = param_dict2["pop_size_wild_1"]
+        self._pop_size_captive = param_dict2["pop_size_captive"]
 
         if self.suffix:
             self._decap_trees_filename = self.add_suffix(decap_trees_filename)
         else:
             self._decap_trees_filename = decap_trees_filename
 
-        replacements_dict = {
-            'p_pop_size_domestic_1': str(int(self._pop_size_domestic_1)),  # Placeholders prefixed with p_ in template
-            'p_pop_size_wild_1': str(int(self._pop_size_wild_1)),
-            'p_pop_size_captive': str(int(self._pop_size_captive)),
-            'p_length': str(int(self.seq_features.length)),
-            'p_recombination_rate': str(self.seq_features.recombination_rate),
-            'p_mig_rate_captive': str(mig_rate_captive),
-            'p_mig_length_wild': str(int(mig_length_wild)),
-            'p_mig_rate_wild': str(mig_rate_wild),
-            'p_captive_time': str(int(captive_time)),
-            'p_random_seed': str(int(self.random_seed)),
-            'p_slim_script_filename': slim_script_filename,
-            'p_decap_trees_filename': self._decap_trees_filename,
-        }
+        param_dict2["length"] = self.seq_features.length
+        param_dict2["recombination_rate"] = self.seq_features.recombination_rate
+        command_no_params = 'slim {} -d decap_trees_filename=\'"{}"\' -s 40 {}'.format(
+            {}, self._decap_trees_filename, slim_script_filename
+        )
 
-        with open(template_filename) as f:
-            command = f.read()
-            for placeholder, value in replacements_dict.items():
-                if placeholder in command:
-                    command = command.replace(placeholder, value)
-                else:
-                    print('Warning: the the placeholder {} could not be found in template file'.format(placeholder))
+        params = ""
+        for key, value in param_dict2.items():
+            params += ("-d {}={} ".format(key, value))
+
+        command = command_no_params.format(params)
+
         return command
 
     def run_slim(self, command):
@@ -102,12 +94,13 @@ class WildcatSimulation:
 
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
-        subprocess.run(['bash', command_f], stdout=subprocess.PIPE,  # See https://bit.ly/3fMIWcE
-                       stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        tree_seq = pyslim.load(self._decap_trees_filename)
-        os.remove(command_f)  # No need to keep the command file (can always print to standard out)
-        os.remove(self._decap_trees_filename)  # We will delete the decapitated trees (don't need them).
-
+        try:
+            subprocess.check_output(['bash', command_f], stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL)  # See https://bit.ly/3fMIWcE
+            tree_seq = pyslim.load(self._decap_trees_filename)
+        finally:  # Ensure files are cleaned up even if above fails
+            os.remove(command_f)
+            os.remove(self._decap_trees_filename)
         return tree_seq
 
     @staticmethod
@@ -251,7 +244,7 @@ def run_sim(param_vec):
 
     seq_features = SeqFeatures(params["seq_length"], params["recombination_rate"], params["mutation_rate"])
     sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
-    command = sim.slim_command(**slim_parameters)
+    command = sim.slim_command(slim_parameters)
     decap_trees = sim.run_slim(command)
 
     demographic_events = sim.demographic_model(**recapitate_parameters)

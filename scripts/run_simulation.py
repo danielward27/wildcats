@@ -33,7 +33,7 @@ recapitate_parameters = {
 
 # Run model
 wild_sim = WildcatSimulation(seq_features, random_seed=2)
-command = wild_sim.slim_command(**slim_parameters)
+command = wild_sim.slim_command(slim_parameters)
 decap_trees = wild_sim.run_slim(command)
 demographic_events = wild_sim.demographic_model(**recapitate_parameters)
 tree_seq = wild_sim.recapitate(decap_trees, demographic_events, demography_debugger=True)

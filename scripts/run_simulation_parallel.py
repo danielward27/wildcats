@@ -10,7 +10,7 @@ import os
 start_time = time.time()
 
 array_id = int(os.environ['PBS_ARRAYID'])
-runs_per_task = 200  # Jobs in an array are referred to as tasks
+runs_per_task = 2  # 200  # Jobs in an array are referred to as tasks
 start_index = array_id*runs_per_task
 end_index = start_index+runs_per_task
 
@@ -28,11 +28,14 @@ for i in range(start_index, end_index):
     seq_features = SeqFeatures(length=int(10e6), recombination_rate=1.8e-8, mutation_rate=6e-8)
     wild_sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
 
-    # Subset parameters based on function arguments
-    slim_parameters = utils.get_params(params, WildcatSimulation.slim_command)
+    # Subset parameters
+    slim_parameters = ['pop_size_domestic_1', 'pop_size_wild_1', 'pop_size_captive',
+                       'mig_rate_captive', 'mig_length_wild', 'mig_rate_wild', 'captive_time']
+    slim_parameters = {key: params[key] for key in slim_parameters}
+
     recapitate_parameters = utils.get_params(params, WildcatSimulation.demographic_model)
 
-    command = wild_sim.slim_command(**slim_parameters)
+    command = wild_sim.slim_command(slim_parameters)
     decap_trees = wild_sim.run_slim(command)
     demographic_events = wild_sim.demographic_model(**recapitate_parameters)
     tree_seq = wild_sim.recapitate(decap_trees, demographic_events)
