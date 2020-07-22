@@ -238,8 +238,10 @@ def run_sim(param_vec):
         if key in int_param_names:
             params[key] = int(params[key])
 
-    # Subset parameters based on function arguments
-    slim_parameters = utils.get_params(params, WildcatSimulation.slim_command)
+    # Subset parameters
+    slim_parameters = ['pop_size_domestic_1', 'pop_size_wild_1', 'pop_size_captive',
+                       'mig_rate_captive', 'mig_length_wild', 'mig_rate_wild', 'captive_time']
+    slim_parameters = {key: params[key] for key in slim_parameters}
     recapitate_parameters = utils.get_params(params, WildcatSimulation.demographic_model)
 
     seq_features = SeqFeatures(params["seq_length"], params["recombination_rate"], params["mutation_rate"])
