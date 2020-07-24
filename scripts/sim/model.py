@@ -17,6 +17,7 @@ import os
 from dataclasses import dataclass
 import sim.sum_stats as ss
 import sim.utils as utils
+import scipy.stats
 
 @dataclass
 class SeqFeatures:
@@ -213,12 +214,12 @@ def tree_summary(tree_seq):
     print("Sequence length: {}".format(tree_seq.sequence_length))
 
 
-def run_sim(param_vec):
-    """ I know this is a horrendous function but easyABC (R package) requires a function that does
+def run_sim(params):
+    """ I know this is an ugly function but easyABC (R package) requires a function that does
     params -> summary stats, so that is what it does. Runs with no sequencing errors.
     parameters
     --------------
-    param_vec: list of parameter values corresponding to the following parameter keys:
+    params: dictionary of parameter values with keys:
         ["random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
          "mig_rate_captive", "mig_length_wild", "mig_rate_wild",  "pop_size_domestic_2",
          "pop_size_wild_2", "div_time", "mig_rate_post_split", "mig_length_post_split",
@@ -226,17 +227,12 @@ def run_sim(param_vec):
          "bottleneck_time_wild", "bottleneck_strength_wild", "recombination_rate", "mutation_rate"]
     """
 
-    param_keys = ["random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
-                  "mig_rate_captive", "mig_length_wild", "mig_rate_wild",  "pop_size_domestic_2",
-                  "pop_size_wild_2", "div_time", "mig_rate_post_split", "mig_length_post_split",
-                  "bottleneck_time_domestic", "bottleneck_strength_domestic", "bottleneck_time_wild",
-                  "bottleneck_strength_wild", "seq_length", "recombination_rate", "mutation_rate"]
-    params = dict(zip(param_keys, param_vec))
-
-    int_param_names = [name for name in param_keys if "rate" not in name]
+    int_param_names = [name for name in params.keys() if "rate" not in name]
     for key, val in params.items():
         if key in int_param_names:
             params[key] = int(params[key])
+        if val < 0:
+            print("warning: parameter {} is < 0".format(key))
 
     # Subset parameters
     slim_parameters = ['pop_size_domestic_1', 'pop_size_wild_1', 'pop_size_captive',
@@ -286,7 +282,6 @@ def run_sim(param_vec):
             stat = {}
         stats_dict = {**stats_dict, **stat}
 
-    print("The summary statistics calculated are:\n"
-          "{}".format(stats_dict.keys()))
-
     return list(stats_dict.values())
+
+
