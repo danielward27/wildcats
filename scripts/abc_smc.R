@@ -72,14 +72,14 @@ example_target = run_sim_parallel(example_param_vec)
 
 #---- Prior ----
 prior=list(
-  "pop_size_domestic_1" = c("unif", 100, 10000),
+  "pop_size_domestic_1" = c("unif", 100, 1000), ## Changed
   "pop_size_wild_1" = c("lognormal", 8, 0.4),
   "pop_size_captive" = c("lognormal", 4.5, 0.3),
   "captive_time" = c("lognormal", 3, 0.7),
   "mig_rate_captive" = c("lognormal", -4, 1),
   "mig_length_wild" = c("lognormal", 3, 0.7),
   "mig_rate_wild" = c("lognormal", -3, 1),
-  "pop_size_domestic_2" =  c("unif", 1000, 20000),
+  "pop_size_domestic_2" =  c("unif", 1000, 2000), ## Changed
   "pop_size_wild_2" = c("lognormal", 8.8, 0.2),
   "bottleneck_time_domestic" = c("normal", 3500, 600),
   "bottleneck_strength_domestic" = c("unif", 0, 40000),
@@ -93,27 +93,37 @@ prior=list(
   "mutation_rate" = c("unif", 6e-8, 6e-8)
   )
 
+print_prior_summary(prior)
+
 prior = unname(prior)
 
 #---- Run rejection algorithm ----
-set.seed(3)
-tic("Parallel")
-ABC_rej <- ABC_rejection(model=run_sim_parallel, prior=prior, nb_simul=100,
-                       summary_stat_target=example_target, tol=0.34, use_seed = TRUE,
-                       n_cluster = 8)
-toc(log=TRUE)
+set.seed(4)
+tic("Sequential - 30 cores:")
+ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
+                               summary_stat_target=example_target, use_seed = TRUE,
+                               n_cluster = 20, tolerance_tab=c(1.5e15, 1.4e15))
+print(toc(log=TRUE))
 
-tic("Serial")
-ABC_rej <- ABC_rejection(model=run_sim_parallel, prior=prior, nb_simul=100,
-                         summary_stat_target=example_target, tol=0.34, use_seed = TRUE)
-toc(log=TRUE)
+tic("Sequential - 20 cores:")
+ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
+                               summary_stat_target=example_target, use_seed = TRUE,
+                               n_cluster = 10, tolerance_tab=c(1.5e15, 1.4e15))
+print(toc(log=TRUE))
+
+
+tic("Sequential - 10 cores:")
+ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
+                          summary_stat_target=example_target, use_seed = TRUE,
+                          n_cluster = 5, tolerance_tab=c(1.5e15, 1.4e15))
+print(toc(log=TRUE))
 
 
 
 
 # prior_test = glue('{Xn("div_time")} > {Xn("mig_rate_post_split")}')
-glue('{Xn("mig_rate_post_split")} > 0')
-Xn("mig_rate_post_split")
+#glue('{Xn("mig_rate_post_split")} > 0')
+#Xn("mig_rate_post_split")
 
 #glue('{Xn("div_time")} > {Xn("mig_rate_post_split")}')
 
