@@ -358,4 +358,46 @@ def ld_prune(genotypes_012, pos, size=100, step=20, threshold=0.1, verbosity=0):
     return genotypes, pos
 
 
+def collected_summaries(tree_seqs):
+    results = []
+    """
+    Added for elfi
+    # TODO: add documentation
+    """
 
+    # Calculate summary statistics
+    def pca_pipeline(genotypes_, pos, pop_list):
+        genotypes_, pos = maf_filter(genotypes_, pos)
+        genotypes_ = genotypes_.to_n_alt()  # 012 with ind as cols
+        genotypes_, pos = ld_prune(genotypes_, pos)
+        pca_stats_dict = pca_stats(genotypes_, pop_list)
+        return pca_stats_dict
+
+    seq_length = int(tree_seqs[0].get_sequence_length())
+
+    for tree_seq in tree_seqs:
+        genotypes_ = genotypes(tree_seq)  # scikit-allel format
+        pos = positions(tree_seq)
+        nodes = sampled_nodes(tree_seq)
+        pops = pop_list(tree_seq)
+
+        # Using a list to call function in for loop so we can use try/except (in case any functions fail)
+        summary_functions = [
+            tskit_stats(tree_seq, nodes),
+            afs_stats(tree_seq, nodes),
+            # TODO: add these back in
+            # r2_stats(tree_seq, sampled_nodes, [0, 1e6, 2e6, 4e6], ["0_1Mb", "1_2Mb", "2_4Mb"]),
+            # roh_stats(genotypes_, pos, pops, seq_length),  # No longer works due to NetworkX 2.0 clash of requirements with elfi
+            pca_pipeline(genotypes, pos, pop_list),
+        ]
+
+        # stats_dict = {"random_seed": sim.random_seed}  # Random seed acts as ID
+        stats_dict = {}
+
+        for func in summary_functions:
+            stat = func
+            stats_dict = {**stats_dict, **stat}
+
+        results.append(list(stats_dict.values()))
+
+    return np.array(results)

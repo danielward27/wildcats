@@ -214,74 +214,57 @@ def tree_summary(tree_seq):
     print("Sequence length: {}".format(tree_seq.sequence_length))
 
 
-def run_sim(params):
-    """ I know this is an ugly function but easyABC (R package) requires a function that does
-    params -> summary stats, so that is what it does. Runs with no sequencing errors.
-    parameters
-    --------------
-    params: dictionary of parameter values with keys:
-        ["random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
-         "mig_rate_captive", "mig_length_wild", "mig_rate_wild",  "pop_size_domestic_2",
-         "pop_size_wild_2", "div_time", "mig_rate_post_split", "mig_length_post_split",
-         "bottleneck_time_domestic", "bottleneck_strength_domestic", "seq_length",
-         "bottleneck_time_wild", "bottleneck_strength_wild", "recombination_rate", "mutation_rate"]
+def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
+                pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
+                captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
+                mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
+                bottleneck_time_domestic, bottleneck_strength_domestic, random_state,
+                batch_size):
     """
+    TODO: Add documentation
+    added for elfi
+    """
+    results = []
 
-    int_param_names = [name for name in params.keys() if "rate" not in name]
-    for key, val in params.items():
-        if key in int_param_names:
-            params[key] = int(params[key])
-        if val < 0:
-            print("warning: parameter {} is < 0".format(key))
+    # Constant sequence features
+    seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
+    sim = WildcatSimulation(seq_features=seq_features, random_seed=random_state.get_state()[1][0])
 
-    # Subset parameters
-    slim_parameters = ['pop_size_domestic_1', 'pop_size_wild_1', 'pop_size_captive',
-                       'mig_rate_captive', 'mig_length_wild', 'mig_rate_wild', 'captive_time']
-    slim_parameters = {key: params[key] for key in slim_parameters}
-    recapitate_parameters = utils.get_params(params, WildcatSimulation.demographic_model)
+    # Run simulation with different param values
+    for i in range(0, batch_size):
+        # run slim
+        slim_param_dict = {
+            "pop_size_domestic_1": int(pop_size_domestic_1[i]),
+            "pop_size_wild_1": int(pop_size_wild_1[i]),
+            "pop_size_captive": int(pop_size_captive[i]),
+            "mig_rate_captive": mig_rate_captive[i],
+            "mig_length_wild": int(mig_length_wild[i]),
+            "mig_rate_wild": mig_rate_wild[i],
+            "captive_time": int(captive_time[i])
+        }
 
-    seq_features = SeqFeatures(params["seq_length"], params["recombination_rate"], params["mutation_rate"])
-    sim = WildcatSimulation(seq_features=seq_features, random_seed=params["random_seed"])
-    command = sim.slim_command(slim_parameters)
-    decap_trees = sim.run_slim(command)
+        command = sim.slim_command(slim_param_dict)
+        decap_trees = sim.run_slim(command)
 
-    demographic_events = sim.demographic_model(**recapitate_parameters)
-    tree_seq = sim.recapitate(decap_trees, demographic_events)
+        # run msprime
+        recapitate_parameters = {
+            'pop_size_domestic_2': int(pop_size_domestic_2[i]),
+            'pop_size_wild_2': int(pop_size_wild_2[i]),
+            'bottleneck_time_wild': int(bottleneck_time_wild[i]),
+            'bottleneck_strength_wild': int(bottleneck_strength_wild[i]),
+            'bottleneck_time_domestic': int(bottleneck_time_domestic[i]),
+            'bottleneck_strength_domestic': int(bottleneck_strength_domestic[i]),
+            'mig_rate_post_split': mig_rate_post_split[i],
+            'mig_length_post_split': int(mig_length_post_split[i]),
+            'div_time': int(div_time[i]),
+        }
 
-    # Take a sample of individuals
-    samples = sim.sample_nodes(tree_seq, [5, 30, 10])
-    tree_seq = tree_seq.simplify(samples=np.concatenate(samples))
-    genotypes = ss.genotypes(tree_seq)
-    pos = ss.positions(tree_seq)
-    pop_list = ss.pop_list(tree_seq)
-    samples = ss.sampled_nodes(tree_seq)
+        demographic_events = sim.demographic_model(**recapitate_parameters)
+        tree_seq = sim.recapitate(decap_trees, demographic_events)
 
-    # Calculate summary statistics
-    def pca_pipeline(genotypes, pos, pop_list):
-        genotypes, pos = ss.maf_filter(genotypes, pos)
-        genotypes = genotypes.to_n_alt()  # 012 with ind as cols
-        genotypes, pos = ss.ld_prune(genotypes, pos)
-        pca_stats = ss.pca_stats(genotypes, pop_list)
-        return pca_stats
+        # Take samples to match number of samples to the WGS data
+        samples = sim.sample_nodes(tree_seq, [5, 30, 10])
+        tree_seq = tree_seq.simplify(samples=np.concatenate(samples))
+        results.append(tree_seq)
 
-    summary_functions = [
-        ss.tskit_stats(tree_seq, samples),
-        ss.afs_stats(tree_seq, samples),
-        ss.r2_stats(tree_seq, samples, [0, 1e6, 2e6, 4e6], labels=["0_1Mb", "1_2Mb", "2_4MB"]),
-        ss.roh_stats(genotypes, pos, pop_list, seq_features.length),
-        pca_pipeline(genotypes, pos, pop_list),
-    ]
-
-    stats_dict = {"random_seed": sim.random_seed}  # Random seed acts as ID
-
-    for func in summary_functions:
-        try:
-            stat = func
-        except Exception:
-            print("The function {} threw an error".format(func.__name__))
-            stat = {}
-        stats_dict = {**stats_dict, **stat}
-
-    return list(stats_dict.values())
-
-
+    return np.array(results)
