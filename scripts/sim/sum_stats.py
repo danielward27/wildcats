@@ -6,53 +6,6 @@ import tskit
 import sim.model
 
 
-
-def sampled_nodes(tree_seq):
-    """Gets a dictionary of all the nodes in the tree sequence. Individuals'
-    nodes are kept adjacent, unlike the built in tree_seq.samples(population ={}).
-    Returns: dict containing node indices for each population"""
-    ind_df = sim.model.individuals_df(tree_seq)
-    sampled_nodes = {
-        "domestic": [],
-        "wild": [],
-        "captive": [],
-        "all_pops": [],
-    }
-    for pop_num, (pop_name, node_list) in enumerate(sampled_nodes.items()):
-        if pop_num == 3:
-            pop_ind_df = ind_df  # All pops
-        else:
-            pop_ind_df = ind_df[ind_df["population"] == pop_num]
-        pop_nodes_0 = np.array(pop_ind_df["node_0"])
-        pop_nodes_1 = np.array(pop_ind_df["node_1"])
-        pop_nodes = np.empty(2 * len(pop_nodes_0), dtype=int)
-        pop_nodes[0::2] = pop_nodes_0  # Keeps individuals nodes adjacent in list
-        pop_nodes[1::2] = pop_nodes_1
-        sampled_nodes[pop_name] = list(pop_nodes)
-    return sampled_nodes
-
-
-def pop_list(tree_seq):
-    """List of each pop name repeated by number of individuals in pop """
-    sn = sampled_nodes(tree_seq)
-    sn.pop("all_pops")
-    pop_list_ = []
-    for pop, nodes in sn.items():
-        pop_list_ += int(len(nodes) / 2) * [pop]
-    return pop_list_
-
-
-def genotypes(tree_seq):
-    """ Returns sampled genotypes in scikit allel genotypes format"""
-    samples = sampled_nodes(tree_seq)["all_pops"]
-    genotype_matrix = np.empty((tree_seq.num_mutations, len(samples)), dtype=np.int8)
-    for j, variant in enumerate(tree_seq.variants(samples=samples)):  # output order corresponds to samples
-        genotype_matrix[j, :] = variant.genotypes
-    haplotype_array = allel.HaplotypeArray(genotype_matrix)
-    allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
-    return allel_genotypes
-
-
 def tskit_stats(tree_seq, sampled_nodes):
     """ Calculates the summary stats from tskit and returns them in a dictionary."""
     samples = [sampled_nodes["domestic"], sampled_nodes["wild"], sampled_nodes["captive"]]
@@ -313,49 +266,6 @@ def pca_stats(genotypes_012, pop_list):
     medians_dict = pca_pairwise_medians(pca_df)
     pca_stats = {**iqr_dict, **medians_dict}
     return pca_stats
-
-
-def positions(tree_seq):
-    pos = []
-    for variant in tree_seq.variants():
-        pos.append(variant.position)
-    pos = np.array(pos)
-    return pos
-
-
-def maf_filter(allel_genotypes, pos, threshold=1, verbosity=0):
-    """Remove minor alleles from genotypes and positions attributes.
-    By default returns an scikit-allel 012 matrix (individuals as columns).
-
-    Arguments
-    -------------
-    allel_genotypes: allel.GenotypeArray (3D)
-    pos: positions array
-    threshold: int, minor allele count threshold (default removes singletons)
-    verbosity: int, If >0 prints how many variants retained
-    """
-    genotypes = allel_genotypes
-    allele_counts = genotypes.count_alleles()
-    maf_filter = allele_counts.min(axis=1) > threshold
-
-    genotypes = genotypes.compress(maf_filter, axis=0)
-    pos = pos[maf_filter]
-
-    if verbosity > 0:
-        print("maf_filter: Retaining: {}  out of {} variants".format(np.sum(maf_filter), len(maf_filter)))
-    return genotypes, pos
-
-
-def ld_prune(genotypes_012, pos, size=100, step=20, threshold=0.1, verbosity=0):
-    """Carries out ld pruning"""
-    loc_unlinked = allel.locate_unlinked(genotypes_012, size=size,
-                                         step=step, threshold=threshold)
-    n = np.count_nonzero(loc_unlinked)
-    genotypes = genotypes_012.compress(loc_unlinked, axis=0)
-    pos = pos[loc_unlinked]
-    if verbosity > 0:
-        print("ld_prune: Retaining: {}  out of {} variants".format(n, genotypes_012.shape[0]))
-    return genotypes, pos
 
 
 def collected_summaries(tree_seqs):

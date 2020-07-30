@@ -10,14 +10,13 @@ between the two populations and a captive wildcat population is established.
 
 import msprime
 import numpy as np
-import pandas as pd
 import pyslim
 import subprocess
 import os
 from dataclasses import dataclass
-import sim.sum_stats as ss
+import allel
+from collections import namedtuple
 import sim.utils as utils
-import scipy.stats
 
 @dataclass
 class SeqFeatures:
@@ -29,11 +28,11 @@ class SeqFeatures:
 
 
 class WildcatSimulation:
-    """Class outlines the model and parameters. Recommended that the directory "../../output/" is set up so
+    """Class outlines the model and parameters. Recommended that the directory "../output/" is set up so
     the default output paths work.
 
     Attributes:
-        pop_size_domestic_1, pop_size_wild_1, pop_size_captive (int): Number of diploid domestic, wild or captive cats.
+        _pop_size_domestic_1, _pop_size_wild_1, _pop_size_captive (int): No. of diploid domestic, wild or captive cats.
         seq_features (object): instance of SeqFeatures dataclass
         random_seed (int): Random seed.
         suffix (bool): Adds _{random_seed} to filenames to avoid overwriting files.
@@ -164,37 +163,54 @@ class WildcatSimulation:
 
         return tree_seq
 
-    def sample_nodes(self, tree_seq, sample_sizes):
-        """Get an initial sample of nodes from the populations that can be used for simplification.
-        Sample_sizes provided in order [dom, wild, captive]. Note the node IDs are not consistent after
-        simplification, although they can be accessed using the sampled_nodes function in SummaryStatistics class.
+    def sample_nodes(self, tree_seq, sample_sizes, concatenate=True):
         """
-        ind_df = individuals_df(tree_seq)
-        sample_nodes = []
-        for pop_num, samp_size in enumerate(sample_sizes):
-            pop_df = ind_df[ind_df["population"] == pop_num]
-            pop_sample = pop_df.sample(samp_size, random_state=self.random_seed)
-            pop_sample_nodes = pop_sample["node_0"].tolist() + pop_sample["node_1"].tolist()
-            sample_nodes.append(pop_sample_nodes)
-        return np.array(sample_nodes)
+        Samples nodes of individuals from the extant populations, which can then be used for simplification.
+        Warning: Node IDs are not kept consistent during simplify!.
+
+        Arguments
+        ---------------
+        tree_seq, tskit.tree_sequence: tree sequence object
+        sample_sizes, list: a list of length 3, with each element giving the sample size
+        for the domestic, wildcat and captive cat population respectively.
+        concatenate, bool: If False, samples for each population are kept in seperate items in the list.
+
+        Returns
+        ------------
+        np.array of nodes. If concatenate is false, an array for each population is returned in a list.
+
+        """
+
+        # Have to use individuals alive at to avoid remembered individuals at slim/msprime interface
+        nodes = np.array([tree_seq.individual(i).nodes for i in tree_seq.individuals_alive_at(0)])
+        pop = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
+        np.random.seed(self.random_seed)
+        samples = []
+        for pop_num in range(0, 3):
+            sampled_inds = np.random.choice(np.where(pop == pop_num)[0], replace=False,
+                                            size=sample_sizes[pop_num])
+            sampled_nodes = nodes[sampled_inds].ravel()
+            samples.append(sampled_nodes)
+
+        samples = np.concatenate(samples) if concatenate else samples
+        return samples
 
 
-def individuals_df(tree_seq):
-    """Returns pd.DataFrame of individuals population and node indices."""
-    individuals = tree_seq.individuals_alive_at(0)
-    ind_dict = {
-        "population": [],
-        "node_0": [],
-        "node_1": [],
-    }
-    for individual in individuals:
-        ind = tree_seq.individual(individual)
-        ind_dict["population"].append(ind.population)
-        ind_dict["node_0"].append(ind.nodes[0])
-        ind_dict["node_1"].append(ind.nodes[1])
+def get_sampled_nodes(tree_seq):
+    """
+    Finds the sampled nodes from a simplified tree_sequence
 
-    ind_df = pd.DataFrame(ind_dict)
-    return ind_df
+    returns: namedtuple, where names are the population, and each tuple element is
+    a numpy array of length 2 lists (the nodes from an individual)
+    """
+    Nodes = namedtuple("Nodes", "domestic, wild, captive")
+
+    nodes = np.array([tree_seq.individual(i).nodes for i in tree_seq.individuals_alive_at(0)])
+    pop = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
+
+    node_tuple = Nodes(domestic=nodes[pop == 0], wild=nodes[pop == 1], captive=nodes[pop == 2])
+
+    return node_tuple
 
 
 def tree_summary(tree_seq):
@@ -268,3 +284,52 @@ def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, 
         results.append(tree_seq)
 
     return np.array(results)
+
+
+Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts")  # Define outside function so pickle works
+
+
+def collate_results(tree_seq):
+    """
+    Collates results from the simulation in a format ideal for scikit-allel analysis.
+    :param tree_seq:
+    :return: named tuple of data, returning dicts of data (for each population)
+    """
+    pops = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
+    all_pops_genotypes = genotypes(tree_seq)
+    all_pops_pos = np.array([variant.position for variant in tree_seq.variants()])
+
+    genotypes_ = {
+        "domestic": all_pops_genotypes[:, pops == 0, :],
+        "wild": all_pops_genotypes[:, pops == 1, :],
+        "captive": all_pops_genotypes[:, pops == 2, :],
+        "all_pops": all_pops_genotypes,
+    }
+
+    positions = all_pops_pos
+
+    subpops = {
+        'domestic': np.where(pops == 0)[0],
+        'wild': np.where(pops == 1)[0],
+        'captive': np.where(pops == 2)[0],
+        'all_pops': np.arange(len(pops))
+    }
+
+    allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
+
+    data = Data(genotypes=genotypes_, positions=positions,
+                subpops=subpops, allele_counts=allele_counts)
+
+    return data
+
+
+def genotypes(tree_seq):
+    """ Returns sampled genotypes in scikit allel genotypes format"""
+    samples = get_sampled_nodes(tree_seq)
+    samples = np.concatenate(samples).flatten()
+    haplotype_array = np.empty((tree_seq.num_mutations, len(samples)), dtype=np.int8)
+    for j, variant in enumerate(tree_seq.variants(samples=samples)):  # output order corresponds to samples
+        haplotype_array[j, :] = variant.genotypes
+    haplotype_array = allel.HaplotypeArray(haplotype_array)
+    allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
+    return allel_genotypes

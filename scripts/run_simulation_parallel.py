@@ -50,7 +50,7 @@ for i in range(start_index, end_index):
 
     # Calculate summary statistics
     def pca_pipeline(genotypes, pos, pop_list):
-        genotypes, pos = ss.maf_filter(genotypes, pos)
+        genotypes, pos = utils.maf_filter(genotypes, pos)
         genotypes = genotypes.to_n_alt()  # 012 with ind as cols
         genotypes, pos = ss.ld_prune(genotypes, pos)
         pca_stats = ss.pca_stats(genotypes, pop_list)
