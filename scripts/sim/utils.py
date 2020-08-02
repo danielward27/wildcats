@@ -9,6 +9,30 @@ from pyarrow.lib import ArrowIOError
 import allel
 
 
+def flatten_dict(d, sep='_'):
+    """
+    Recursively flattens a nested dictionary, concatenating the outer and inner keys.
+
+    Arguments
+    -----------
+    stats_dict: A nested dictionary of statistics
+    sep: seperator for keys
+
+    Returns
+    ------------
+    dict
+    """
+    def items():
+        for key, value in d.items():
+            if isinstance(value, dict):
+                for subkey, subvalue in flatten_dict(value).items():
+                    yield key + sep + subkey, subvalue
+            else:
+                yield key, value
+
+    return dict(items())
+
+
 def maf_filter(allel_genotypes, pos, threshold=1, verbosity=0):
     """Remove minor alleles from genotypes and positions attributes.
     By default returns an scikit-allel 012 matrix (individuals as columns).

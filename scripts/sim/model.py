@@ -286,7 +286,7 @@ def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, 
     return np.array(results)
 
 
-Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts")  # Define outside function so pickle works
+Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts, seq_length")  # Define outside function so pickle works
 
 
 def collate_results(tree_seq):
@@ -318,7 +318,8 @@ def collate_results(tree_seq):
     allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
 
     data = Data(genotypes=genotypes_, positions=positions,
-                subpops=subpops, allele_counts=allele_counts)
+                subpops=subpops, allele_counts=allele_counts,
+                seq_length=int(tree_seq.get_sequence_length()))
 
     return data
 
