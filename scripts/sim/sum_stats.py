@@ -149,89 +149,46 @@ def roh(genotypes, positions):
 
 def r2(x, y):
     """
-    Calculates r2 between a 1d array of a variants genotypes, and a set of other variants. Note,
-    the same result could be achieved with np.corrcoef(x, y)[1:, 0]**2 but this has much less overhead.
+    Calculates rogers huff r2 between a 1d array of a variants genotypes, and a set of other variants. Genotypes are provided
+    in 012 format (ie. 0==homozygote reference, 1==heterozygote and 2==homozygote alternate.
+    Note, the same result could be achieved with np.corrcoef(x, y)[1:, 0]**2 but this has much less overhead.
     :param x: Focal variant of shape (n_individuals,)
     :param y: Other variants of shape (n_variants, n_individuals)
-    :return: Vector of r2 of shape y.shape[]
+    :return: Vector of r2 values of shape y.shape[0]
     """
     np_arr_2d = np.vstack((x, y))
     demeaned = np_arr_2d - np_arr_2d.mean(axis=1)[:, None]
     res = demeaned@demeaned[0]
     row_norms = np.sqrt((demeaned ** 2).sum(axis=1))
-    res = res / row_norms / row_norms[0]
+    res = res / (row_norms * row_norms[0])
     res = res**2
     return res[1:]
 
 
-def r2__(x, y):
+def binned_r2(genotypes, pos, seq_length, bins, labels,
+           n_focal_muts=100, comparison_mut_lim=1000):
     """
-    Calculates r2 between the genotypes at a specific variant and a set of other variants.
-
-    Arguments
-    ---------
-    x: np.array of a focal variants genotypes (length n individuals)
-    y: np.array of other variants, with shape (n_individuals, n_variants)
-
-    Returns
-    --------
-    Vector of length equal to number of y.shape[1]
-
+    Caclulates rogers huff in different bin lengths across the genome. Random focal mutations are chosen,
+    and R2 is calculated between each focal mutation to other mutations in the bins specified.
+    :param genotypes: scikit allel 2d array of genotypes in 012 format (see allel to_n_alt() method)
+    :param pos: ascending positions array corresponding to axis 0 of genotypes
+    :param seq_length: int, Sequence length
+    :param bins: list, list of bins e.g [0, 1e6, 2e6] would do 0-1Mb and 1-2Mb
+    :param labels: list containing string labels for the bins
+    :param n_focal_muts: Number of random focal mutations to use
+    :param comparison_mut_lim: Limit the number of comparison mutations for each focal mutation (to limit memory usage)
+    :return: pd.DataFrame containing r2 values
     """
-    n = len(x)
-    num = n * np.inner(x, y) - np.sum(x) * np.sum(y, axis=1)
-    den = np.sqrt(n * np.sum(x ** 2) - np.sum(x) ** 2) * np.sqrt(n * np.sum(y ** 2, axis=1) - np.sum(y, axis=1) ** 2)
-    r2_ = (num / den) ** 2
-
-    return r2_
-
-def r2_old(x, y):
-    """
-    Calculates r2 between the genotypes at a specific variant and a set of other variants.
-
-    Arguments
-    ---------
-    x: np.array of a focal variants genotypes (length n individuals)
-    y: np.array of other variants, with shape (n_individuals, n_variants)
-
-    Returns
-    --------
-    Vector of length equal to number of y.shape[1]
-
-    """
-    # TODO: delete below
-    #n = len(x)
-    #num = n * np.inner(x, y) - np.sum(x) * np.sum(y, axis=1)
-    #den = np.sqrt(n * np.sum(x ** 2) - np.sum(x) ** 2) * np.sqrt(n * np.sum(y ** 2, axis=1) - np.sum(y, axis=1) ** 2)
-    #print(num, ]den)
-    #r2 = (num / den) ** 2
-    r2 = (np.corrcoef(x, y) ** 2)[1:, 0]
-    return r2
-
-def r2_new(genotypes, pos, seq_length, bins, labels,
-           n_focal_muts=100, comparison_mut_lim=500):
-    """
-    TODO: DOCUMENT (ROJERS HUFF)
-    :param genotypes:
-    :param pos:
-    :param allele_counts:
-    :param seq_length:
-    :param bins:
-    :param labels:
-    :param n_focal_muts:
-    :param comparison_mut_lim:
-    :return:
-    """
-    # Convert to 012 format
-    genotypes = genotypes.to_n_alt()
 
     # Filter monomorphic (or indeterminable due to 012)
-    mono = np.logical_or(np.all(genotypes == 0, axis=1), np.all(genotypes == 1, axis=1),
-                         np.all(genotypes == 2, axis=1))
+    mono = np.any([np.all(genotypes == 0, axis=1),
+                   np.all(genotypes == 1, axis=1),
+                   np.all(genotypes == 2, axis=1)], axis=0)
 
     genotypes, pos = genotypes[~mono], pos[~mono]
 
     max_bin = bins[-1]
+    min_bin = bins[0]
 
     # Find max index to ensure "room" for mutations to compare
     max_idx = np.where(seq_length - max_bin < pos)[0].min()
@@ -240,7 +197,8 @@ def r2_new(genotypes, pos, seq_length, bins, labels,
     for i in range(0, n_focal_muts):
         focal_mut_idx = np.random.randint(0, max_idx)
         focal_mut_pos = pos[focal_mut_idx]
-        next_muts_idx = np.where(np.logical_and(pos > focal_mut_pos, pos < focal_mut_pos + max_bin))[0]
+        next_muts_idx = np.where(np.logical_and(pos > focal_mut_pos + min_bin,
+                                                pos < focal_mut_pos + max_bin))[0]
 
         df_i = pd.DataFrame({
             "index": next_muts_idx,
@@ -257,90 +215,6 @@ def r2_new(genotypes, pos, seq_length, bins, labels,
 
     results = pd.concat(df_list)
     return results
-
-
-def r2_data(genotypes, pos, seq_length, bins, labels, n_focal_muts=100, n_iter_muts=500):
-    """Takes a scikit.allel.GenotypeArray and returns a df of r2 values for different bins.
-    See r2_stats for more info."""
-    haplotypes = genotypes.to_haplotypes()
-    iterate_length = bins[-1]
-    df_list = []
-    # Find max index to avoid choosing focal mutation at end of chromosome
-    max_idx = np.where(pos > seq_length - iterate_length)[0].min()
-    for i in range(0, n_focal_muts):
-        focal_mut_idx = np.random.randint(0, max_idx)
-        focal_mut_pos = pos[focal_mut_idx]
-
-        next_muts_idx = np.where(np.logical_and(pos > focal_mut_pos, pos < focal_mut_pos + iterate_length))[0]
-
-        df_i = pd.DataFrame({
-            "index": next_muts_idx,
-            "pos": pos[next_muts_idx],
-        })
-        df_i["dist"] = df_i["pos"] - focal_mut_pos
-        df_i["bins"] = pd.cut(df_i["dist"], bins, labels=labels)
-
-        df_i = df_i.groupby("bins").apply(
-            lambda x: x.sample(n_iter_muts) if len(x) > n_iter_muts else x).reset_index(drop=True)
-
-        df_i["r2"] = df_i["index"].apply(
-            lambda x: pearsonr(haplotypes[focal_mut_idx], haplotypes[x])[0]**2)
-
-        df_list.append(df_i)
-
-    results = pd.concat(df_list)
-
-    return results
-
-
-def r2_stats(tree_seq, sampled_nodes, bins, labels, n_focal_muts=100, n_iter_muts=500, summarise=True):
-    """
-    Calculates the r2 ld statistic in bins distances.
-    Chooses focal mutations, iterates over subsequent mutations calculating r2
-    and adds the values to the appropriate bins.
-
-    Note: if memory usage is high, could summarise within the loop (instead of appending to a df)
-    Warning: small bin sizes may have smaller sample sizes (due to fewer mutations)
-
-    Arguments
-    ------------
-    tree_seq: tskit.TreeSequence
-    sampled_nodes: dictionary of populations and nodes
-    bins: list of bins e.g. [0, 1e6, 2e6] would create bins 0-1Mb and 1-2Mb
-    labels: List of labels corresponding to bins
-    n_focal_muts: int, the number of random focal mutations to choose
-    n_iter_muts: int, number of mutations in each bin length to draw
-                (takes all mutations if n_iter_muts > number of mutations in bin group)
-    summarise: If False, returns a df of r2_data for each sample sets
-
-    returns dictionary, with r2 mean and iqr for each population, for each bin
-    """
-    seq_length = tree_seq.get_sequence_length()
-
-    df_list = []
-    for pop, samples in sampled_nodes.items():
-        ts = tree_seq.simplify(samples=samples)
-        pos = positions(ts)
-        gen = genotypes(ts)
-
-        # Filter monomorphic sites
-        gen, pos = maf_filter(gen, pos, threshold=0)
-
-        r2_df = r2_data(gen, pos, seq_length, bins,
-                        labels, n_focal_muts, n_iter_muts)
-        r2_df = r2_df.drop(columns=["pos"])
-        r2_df["population"] = pop
-        df_list.append(r2_df)
-    df = pd.concat(df_list)
-
-    if summarise is False:
-        return df
-    else:
-        df = df.groupby(["population", "bins"])["r2"].agg(r2_median=np.median, r2_iqr=iqr).reset_index()
-        df = df.melt(id_vars=["population", "bins"], var_name="stat")
-        df["dict_names"] = df["population"] + "_" + df["stat"] + "_" + df["bins"].astype("O")
-        stat_dict = df[["dict_names", "value"]].set_index('dict_names').to_dict()["value"]
-        return stat_dict
 
 
 def pca(genotypes_012, pop_list):
