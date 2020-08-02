@@ -7,10 +7,11 @@ from scipy.stats import iqr, pearsonr
 import numpy as np
 import pandas as pd
 import allel
+import sim.utils
 import tskit
 
 
-def sfs_means(ac, bin_no=5):
+def binned_sfs_mean(ac, bin_no=5):
     """
     Caclulates the mean allele counts in bins across the site frequency spectrum.
     Ignores position 0 which corresponds to monomophic sites (which can be non-zero in sub populations).
@@ -46,6 +47,7 @@ def one_way_stats(data):
     """
     Caclulates diversity, tajimas d, wattersons theta, observed heterozygosity,
     and expected heterozygosity for the populations seperately and combined.
+    TODO: UPDATE TO MORE STATS
 
     Arguments
     ---------
@@ -58,7 +60,7 @@ def one_way_stats(data):
     pop_names = ["domestic", "wild", "captive", "all_pops"]
 
     stats = {
-        "sfs_means": {},
+        "sfs_mean": {},
         "diversity": {},
         "wattersons_theta": {},
         "tajimas_d": {},
@@ -68,10 +70,12 @@ def one_way_stats(data):
         "segregating_sites": {},
         "roh_mean": {},
         "roh_iqr": {},
+        "r2": {},
     }
 
     for pop in pop_names:
-        stats["sfs_means"][pop] = sfs_means(data.allele_counts[pop])
+        # Traditional statistics
+        stats["sfs_mean"][pop] = binned_sfs_mean(data.allele_counts[pop])
         stats["diversity"][pop] = allel.sequence_diversity(data.positions, data.allele_counts[pop])
         stats["wattersons_theta"][pop] = allel.watterson_theta(data.positions, data.allele_counts[pop])
         stats["tajimas_d"][pop] = allel.tajima_d(data.allele_counts[pop], data.positions)
@@ -79,9 +83,14 @@ def one_way_stats(data):
         stats["expected_heterozygosity"][pop] = allel.heterozygosity_expected(data.allele_counts[pop].to_frequencies(), ploidy=2).mean()
         stats["segregating_sites"] = data.allele_counts[pop].count_segregating()
 
+        # LD statistics
         roh_ = roh(data.genotypes[pop], data.positions)
         stats["roh_mean"][pop] = roh_.mean()
         stats["roh_iqr"][pop] = iqr(roh_)
+
+        r2_ = binned_r2(data.genotypes[pop].to_n_alt(), data.positions, data.seq_length,
+                        [0, 0.5e6, 1e6, 2e6, 4e6], ["0_0.5mb", "0.5_1e6", "1_2mb", "2_4mb"])
+        stats["r2"][pop] = r2_.groupby("bins")["r2"].median().to_dict()
 
         if pop is not "all_pops":  # all_pops has no monomorphic sites
             stats["monomorphic_sites"][pop] = data.allele_counts[pop].count_non_segregating()
@@ -118,6 +127,8 @@ def two_way_stats(data):
         stats["fst"][comparison] = np.sum(num) / np.sum(den)
         stats["f2"][comparison] = allel.patterson_f2(data.allele_counts[p[0]], data.allele_counts[p[1]]).mean()
 
+
+
     return stats
 
 
@@ -128,7 +139,7 @@ def roh(genotypes, positions):
     Parameters
     ----------
     genotypes: scikit allel 3d genotypes array shape (variants, individuals, 2)
-    positions: np.array of positions corresponding to axis 0 of genotypes
+    positions: np.array of positions corresponding to axis 0 of genotypes (the variants)
 
     returns
     -----------
@@ -166,7 +177,7 @@ def r2(x, y):
 
 
 def binned_r2(genotypes, pos, seq_length, bins, labels,
-           n_focal_muts=100, comparison_mut_lim=1000):
+              n_focal_muts=100, comparison_mut_lim=1000):
     """
     Caclulates rogers huff in different bin lengths across the genome. Random focal mutations are chosen,
     and R2 is calculated between each focal mutation to other mutations in the bins specified.
@@ -179,13 +190,7 @@ def binned_r2(genotypes, pos, seq_length, bins, labels,
     :param comparison_mut_lim: Limit the number of comparison mutations for each focal mutation (to limit memory usage)
     :return: pd.DataFrame containing r2 values
     """
-
-    # Filter monomorphic (or indeterminable due to 012)
-    mono = np.any([np.all(genotypes == 0, axis=1),
-                   np.all(genotypes == 1, axis=1),
-                   np.all(genotypes == 2, axis=1)], axis=0)
-
-    genotypes, pos = genotypes[~mono], pos[~mono]
+    genotypes, pos = sim.utils.monomorphic_012_filter(genotypes, pos)
 
     max_bin = bins[-1]
     min_bin = bins[0]
@@ -217,57 +222,68 @@ def binned_r2(genotypes, pos, seq_length, bins, labels,
     return results
 
 
-def pca(genotypes_012, pop_list):
-    """Patterson PCA of the genotypes. genotypes_012 is the scikit-allel 012 (alt_n) format. Returns df."""
+def pca(genotypes_012, subpops):
+    """Carries out ld pruning and Patterson PCA of the genotypes.
+    :param genotypes_012, genotype matrix in 012 (scikit-allel alt_n format)
+    :param subpops, dictionary of subpopulation indexes
+    :returns pd.DataFrame
+    """
+    genotypes_012 = sim.utils.monomorphic_012_filter(genotypes_012)
+
+    genotypes_012 = sim.utils.ld_prune(genotypes_012)
     coords, model = allel.pca(genotypes_012, n_components=2, scaler='patterson')
-    df = pd.DataFrame({"pc1": coords[:, 0],
+
+    pops = []
+    for pop in ["domestic", "wild", "captive"]:
+        pops.append(np.repeat(pop, len(subpops[pop])))
+
+    pops = np.concatenate(pops)
+
+    pca_data = pd.DataFrame({"pc1": coords[:, 0],
                        "pc2": coords[:, 1],
-                       "population": pop_list})
-    df = df.melt(id_vars="population", var_name="pc")
-    return df
+                       "population": pops})
+
+    return pca_data
 
 
-def pca_iqr(df):
-    """ Calculates the interquartile range of principle components using df outputted from pca function."""
-    iqr_df = df.groupby(["population", "pc"])["value"].agg(iqr).reset_index()
-    iqr_df["col_names"] = iqr_df["population"] + "_" + iqr_df["pc"] + "_iqr"
-    iqr_dict = pd.Series(iqr_df["value"].values, index=iqr_df["col_names"]).to_dict()
+def pca_one_way_stats(pca_data):
+    """
+    Calculates the median and iqr of the populations, separately and combined.
+    :param pca_data: pca data (produced by pca function)
+    :return: nested dictionary of pca statistics for each population
+    """
+    # Append "all_pops" so we can groupby
+    pca_data_all_pops = pca_data.copy()
+    pca_data_all_pops["population"] = "all_pops"
+    pca_data = pca_data.append(pca_data_all_pops)
 
-    # Do for populations combined
-    all_pops_iqr = df.groupby("pc")["value"].apply(iqr)
-    iqr_dict["all_pops_pc1_iqr"] = all_pops_iqr["pc1"]
-    iqr_dict["all_pops_pc2_iqr"] = all_pops_iqr["pc2"]
-    return iqr_dict
+    stats = pca_data.groupby("population").agg((np.median, iqr))
+    stats.columns = ['_'.join(col).strip() for col in stats.columns.values]
+    stats = stats.to_dict()
+    return stats
 
 
-def pca_pairwise_medians(df):
-    """ Calculates the pairwise distances between the medians from the output of the pca function above."""
+
+def pca_two_way_stats(pca_data):
+    """ Calculates the pairwise distances between the medians from the output of the pca function above.
+    :param pca_data, pca data (can be made using pca function above)
+    :returns nested dictionary of statistics
+    """
     comparisons = [("domestic", "wild"), ("domestic", "captive"), ("wild", "captive")]
-    labels = ["dom_wild", "dom_cap", "wild_cap"]
-    medians = df.groupby(["population", "pc"])["value"].agg("median").reset_index()
-    pairwise_medians = pd.DataFrame()
-    for comp, label in zip(comparisons, labels):
-        comp_df = medians[medians["population"].isin(comp)].copy()
-        dif = comp_df.groupby("pc")["value"].apply(lambda grp: abs(grp.min() - grp.max())).reset_index()
-        dif["comparison"] = label
-        pairwise_medians = pd.concat([pairwise_medians, dif])
-    pairwise_medians["col_names"] = pairwise_medians["pc"] + "_pairwise_medians_" + pairwise_medians["comparison"]
+    medians = pca_data.groupby(["population"])[["pc1", "pc2"]].median()
 
-    pairwise_medians_dict = pd.Series(pairwise_medians["value"].values,
-                                      index=pairwise_medians["col_names"]).to_dict()
-    return pairwise_medians_dict
+    stats = {"pc1_median_dist": {}, "pc2_median_dist": {}}
 
+    for comp in comparisons:
+        for pc in ["pc1", "pc2"]:
+            stats[f"{pc}_median_dist"][f"{comp[0]}_{comp[1]}"] = abs(medians[pc][comp[0]] - medians[pc][comp[1]])
 
-def pca_stats(genotypes_012, pop_list):
-    """Calculates pca summary stats (iqrs and pairwise distances)."""
-    pca_df = pca(genotypes_012, pop_list)
-    iqr_dict = pca_iqr(pca_df)
-    medians_dict = pca_pairwise_medians(pca_df)
-    pca_stats = {**iqr_dict, **medians_dict}
-    return pca_stats
+    return stats
 
 
 def collected_summaries(tree_seqs):
+    # TODO update function once thought best way to do it with elfi.
+    print("Warning currently deprecated")
     results = []
     """
     Added for elfi

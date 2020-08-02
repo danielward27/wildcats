@@ -33,7 +33,25 @@ def flatten_dict(d, sep='_'):
     return dict(items())
 
 
-def maf_filter(allel_genotypes, pos, threshold=1, verbosity=0):
+def monomorphic_012_filter(genotypes_012, pos=None):
+    """
+    Removes variants from 012 format in which only a single state is observed.
+    Note constant heterozygotes are also removed
+    :param genotypes_012: 012 format of genotypes (see to_n_alt() of scikit allel).
+    :param pos, positions vector
+    :return: a 2 tuple of genotypes and positions if positions passed, else just genotypes
+    """
+    mono = np.any([np.all(genotypes_012 == 0, axis=1),
+                   np.all(genotypes_012 == 1, axis=1),
+                   np.all(genotypes_012 == 2, axis=1)], axis=0)
+
+    if pos is not None:
+        return genotypes_012[~mono], pos[~mono]
+    else:
+        return genotypes_012[~mono]
+
+
+def maf_filter(allel_genotypes, pos=None, threshold=1, verbosity=0):
     """Remove minor alleles from genotypes and positions attributes.
     By default returns an scikit-allel 012 matrix (individuals as columns).
 
@@ -49,22 +67,31 @@ def maf_filter(allel_genotypes, pos, threshold=1, verbosity=0):
     maf_filter = allele_counts.min(axis=1) > threshold
 
     genotypes = genotypes.compress(maf_filter, axis=0)
-    pos = pos[maf_filter]
 
     if verbosity > 0:
         print("maf_filter: Retaining: {}  out of {} variants".format(np.sum(maf_filter), len(maf_filter)))
-    return genotypes, pos
 
-def ld_prune(genotypes_012, pos, size=100, step=20, threshold=0.1, verbosity=0):
+    if pos is not None:
+        pos = pos[maf_filter]
+        return genotypes, pos
+    else:
+        return genotypes
+
+
+def ld_prune(genotypes_012, pos=None, size=100, step=20, threshold=0.1, verbosity=0):
     """Carries out ld pruning"""
     loc_unlinked = allel.locate_unlinked(genotypes_012, size=size,
                                          step=step, threshold=threshold)
     n = np.count_nonzero(loc_unlinked)
     genotypes = genotypes_012.compress(loc_unlinked, axis=0)
-    pos = pos[loc_unlinked]
     if verbosity > 0:
         print("ld_prune: Retaining: {}  out of {} variants".format(n, genotypes_012.shape[0]))
-    return genotypes, pos
+    if pos is not None:
+        pos = pos[loc_unlinked]
+        return genotypes, pos
+    else:
+        return genotypes
+
 
 def merge_sum_stats(num_files, filename, output_filename):
     """Merges 0 indexed incrementally numbered summary statistic feather files,
