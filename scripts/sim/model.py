@@ -230,6 +230,136 @@ def tree_summary(tree_seq):
     print("Sequence length: {}".format(tree_seq.sequence_length))
 
 
+Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts, seq_length")  # Define outside function so pickle works
+
+
+class Results:
+    """
+        Collates results from the simulation in a format ideal for scikit-allel analysis.
+        :param tree_seq:
+        :return: named tuple of data, returning dicts of data (for each population)
+    """
+    def __init__(self, tree_seq):
+        self.genotypes = None
+        self.positions = None
+        self.subpops = None
+        self.allele_counts = None
+        self.seq_length = None
+        self._initialize(tree_seq)
+
+    def _initialize(self, tree_seq):
+        pops = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
+        all_pops_genotypes = genotypes(tree_seq)
+        positions = np.array([variant.position for variant in tree_seq.variants()])
+
+        genotypes_ = {
+            "domestic": all_pops_genotypes[:, pops == 0, :],
+            "wild": all_pops_genotypes[:, pops == 1, :],
+            "captive": all_pops_genotypes[:, pops == 2, :],
+            "all_pops": all_pops_genotypes,
+        }
+
+        subpops = {
+            'domestic': np.where(pops == 0)[0],
+            'wild': np.where(pops == 1)[0],
+            'captive': np.where(pops == 2)[0],
+            'all_pops': np.arange(len(pops))
+        }
+
+        allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
+
+        self.genotypes = genotypes_
+        self.positions = positions
+        self.subpops = subpops
+        self.allele_counts = allele_counts
+        self.seq_length = int(tree_seq.get_sequence_length())
+
+
+def genotypes(tree_seq):
+    """ Returns sampled genotypes in scikit allel genotypes format"""
+    samples = get_sampled_nodes(tree_seq)
+    samples = np.concatenate(samples).flatten()
+    haplotype_array = np.empty((tree_seq.num_mutations, len(samples)), dtype=np.int8)
+    for j, variant in enumerate(tree_seq.variants(samples=samples)):  # output order corresponds to samples
+        haplotype_array[j, :] = variant.genotypes
+    haplotype_array = allel.HaplotypeArray(haplotype_array)
+    allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
+    return allel_genotypes
+
+
+def run_sim(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
+            pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
+            captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
+            mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
+            bottleneck_time_domestic, bottleneck_strength_domestic, random_state):
+    """
+    Runs the simulation "vectorised" in a way that works with elfi.
+
+    :param length: sequence length in bp
+    :param recombination_rate: recombination rate per base pair
+    :param mutation_rate: mutation rate per base pair
+    :param pop_size_domestic_1: domestic population size initially used in slim
+    :param pop_size_wild_1: wild population size initially used in slim
+    :param pop_size_captive: captive population size established at captive_time
+    :param mig_rate_captive: migration rate into the captive population from the wild population
+    :param mig_length_wild: length in generations from present that migration domestic -> wild starts
+    :param mig_rate_wild: migration rate from domestic into captive population
+    :param captive_time: Time in generations ago that the captive population is established
+    :param pop_size_domestic_2: Ancient (pre-bottleneck) domestic population size
+    :param pop_size_wild_2: Ancient (pre-bottleneck) wild population size
+    :param div_time: Divergence time between domestic cats and wildcats (lybica and silvestris)
+    :param mig_rate_post_split: Migration rate post divergence
+    :param mig_length_post_split: Number of generations post split migration occurs for
+    :param bottleneck_time_wild: Wild bottleneck (corresponding to migrating to Britain
+    :param bottleneck_strength_wild:
+    :param bottleneck_time_domestic:
+    :param bottleneck_strength_domestic:
+    :param random_state: np.RandomState object
+    :return: np.array of data named tuples
+    """
+    # Constant sequence features
+    seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
+    sim = WildcatSimulation(seq_features=seq_features, random_seed=random_state.get_state()[1][0])
+
+    # Run simulation with different param values
+    # run slim
+    slim_param_dict = {
+        "pop_size_domestic_1": int(pop_size_domestic_1),
+        "pop_size_wild_1": int(pop_size_wild_1),
+        "pop_size_captive": int(pop_size_captive),
+        "mig_rate_captive": mig_rate_captive,
+        "mig_length_wild": int(mig_length_wild),
+        "mig_rate_wild": mig_rate_wild,
+        "captive_time": int(captive_time)
+    }
+
+    command = sim.slim_command(slim_param_dict)
+    decap_trees = sim.run_slim(command)
+
+    # run msprime
+    recapitate_parameters = {
+        'pop_size_domestic_2': int(pop_size_domestic_2),
+        'pop_size_wild_2': int(pop_size_wild_2),
+        'bottleneck_time_wild': int(bottleneck_time_wild),
+        'bottleneck_strength_wild': int(bottleneck_strength_wild),
+        'bottleneck_time_domestic': int(bottleneck_time_domestic),
+        'bottleneck_strength_domestic': int(bottleneck_strength_domestic),
+        'mig_rate_post_split': mig_rate_post_split,
+        'mig_length_post_split': int(mig_length_post_split),
+        'div_time': int(div_time),
+    }
+
+    demographic_events = sim.demographic_model(**recapitate_parameters)
+    tree_seq = sim.recapitate(decap_trees, demographic_events)
+
+    # Take samples to match number of samples to the WGS data
+    samples = sim.sample_nodes(tree_seq, [5, 30, 10])
+    tree_seq = tree_seq.simplify(samples=samples)
+    data = Results(tree_seq)
+
+    return np.array(data)
+
+
 def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
                 pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
                 captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
@@ -237,10 +367,32 @@ def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, 
                 bottleneck_time_domestic, bottleneck_strength_domestic, random_state,
                 batch_size):
     """
-    TODO: Add documentation
-    added for elfi
+    Runs the simulation "vectorised" in a way that works with elfi
+
+    :param length: sequence length in bp
+    :param recombination_rate: recombination rate per base pair
+    :param mutation_rate: mutation rate per base pair
+    :param pop_size_domestic_1: domestic population size initially used in slim
+    :param pop_size_wild_1: wild population size initially used in slim
+    :param pop_size_captive: captive population size established at captive_time
+    :param mig_rate_captive: migration rate into the captive population from the wild population
+    :param mig_length_wild: length in generations from present that migration domestic -> wild starts
+    :param mig_rate_wild: migration rate from domestic into captive population
+    :param captive_time: Time in generations ago that the captive population is established
+    :param pop_size_domestic_2: Ancient (pre-bottleneck) domestic population size
+    :param pop_size_wild_2: Ancient (pre-bottleneck) wild population size
+    :param div_time: Divergence time between domestic cats and wildcats (lybica and silvestris)
+    :param mig_rate_post_split: Migration rate post divergence
+    :param mig_length_post_split: Number of generations post split migration occurs for
+    :param bottleneck_time_wild: Wild bottleneck (corresponding to migrating to Britain
+    :param bottleneck_strength_wild:
+    :param bottleneck_time_domestic:
+    :param bottleneck_strength_domestic:
+    :param random_state: np.RandomState object
+    :param batch_size: number to run in serial
+    :return: np.array of data named tuples
     """
-    results = []
+    data_list = []
 
     # Constant sequence features
     seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
@@ -280,57 +432,11 @@ def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, 
 
         # Take samples to match number of samples to the WGS data
         samples = sim.sample_nodes(tree_seq, [5, 30, 10])
-        tree_seq = tree_seq.simplify(samples=np.concatenate(samples))
-        results.append(tree_seq)
+        tree_seq = tree_seq.simplify(samples=samples)
+        data = Results(tree_seq)
 
-    return np.array(results)
+        data_list.append(data)
 
-
-Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts, seq_length")  # Define outside function so pickle works
-
-
-def collate_results(tree_seq):
-    """
-    Collates results from the simulation in a format ideal for scikit-allel analysis.
-    :param tree_seq:
-    :return: named tuple of data, returning dicts of data (for each population)
-    """
-    pops = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
-    all_pops_genotypes = genotypes(tree_seq)
-    all_pops_pos = np.array([variant.position for variant in tree_seq.variants()])
-
-    genotypes_ = {
-        "domestic": all_pops_genotypes[:, pops == 0, :],
-        "wild": all_pops_genotypes[:, pops == 1, :],
-        "captive": all_pops_genotypes[:, pops == 2, :],
-        "all_pops": all_pops_genotypes,
-    }
-
-    positions = all_pops_pos
-
-    subpops = {
-        'domestic': np.where(pops == 0)[0],
-        'wild': np.where(pops == 1)[0],
-        'captive': np.where(pops == 2)[0],
-        'all_pops': np.arange(len(pops))
-    }
-
-    allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
-
-    data = Data(genotypes=genotypes_, positions=positions,
-                subpops=subpops, allele_counts=allele_counts,
-                seq_length=int(tree_seq.get_sequence_length()))
-
-    return data
+    return np.atleast_2d(data_list)
 
 
-def genotypes(tree_seq):
-    """ Returns sampled genotypes in scikit allel genotypes format"""
-    samples = get_sampled_nodes(tree_seq)
-    samples = np.concatenate(samples).flatten()
-    haplotype_array = np.empty((tree_seq.num_mutations, len(samples)), dtype=np.int8)
-    for j, variant in enumerate(tree_seq.variants(samples=samples)):  # output order corresponds to samples
-        haplotype_array[j, :] = variant.genotypes
-    haplotype_array = allel.HaplotypeArray(haplotype_array)
-    allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
-    return allel_genotypes

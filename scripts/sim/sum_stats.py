@@ -43,11 +43,10 @@ def binned_sfs_mean(ac, bin_no=5):
     return stats
 
 
-def one_way_stats(data):
+def traditional_stats(data):
     """
-    Caclulates diversity, tajimas d, wattersons theta, observed heterozygosity,
-    and expected heterozygosity for the populations seperately and combined.
-    TODO: UPDATE TO MORE STATS
+    Caclulates lots of (mostly) traditional statistics,
+    that are summaries of the site frequency spectrum.
 
     Arguments
     ---------
@@ -66,15 +65,19 @@ def one_way_stats(data):
         "tajimas_d": {},
         "observed_heterozygosity": {},
         "expected_heterozygosity": {},
-        "monomorphic_sites": {},
         "segregating_sites": {},
+        "monomorphic_sites": {},
         "roh_mean": {},
         "roh_iqr": {},
         "r2": {},
+        "f3": {},
+        "divergence": {},
+        "fst": {},
+        "f2": {},
     }
 
     for pop in pop_names:
-        # Traditional statistics
+        # One way statistics
         stats["sfs_mean"][pop] = binned_sfs_mean(data.allele_counts[pop])
         stats["diversity"][pop] = allel.sequence_diversity(data.positions, data.allele_counts[pop])
         stats["wattersons_theta"][pop] = allel.watterson_theta(data.positions, data.allele_counts[pop])
@@ -83,41 +86,19 @@ def one_way_stats(data):
         stats["expected_heterozygosity"][pop] = allel.heterozygosity_expected(data.allele_counts[pop].to_frequencies(), ploidy=2).mean()
         stats["segregating_sites"] = data.allele_counts[pop].count_segregating()
 
-        # LD statistics
-        roh_ = roh(data.genotypes[pop], data.positions)
-        stats["roh_mean"][pop] = roh_.mean()
-        stats["roh_iqr"][pop] = iqr(roh_)
-
-        r2_ = binned_r2(data.genotypes[pop].to_n_alt(), data.positions, data.seq_length,
-                        [0, 0.5e6, 1e6, 2e6, 4e6], ["0_0.5mb", "0.5_1e6", "1_2mb", "2_4mb"])
-        stats["r2"][pop] = r2_.groupby("bins")["r2"].median().to_dict()
 
         if pop is not "all_pops":  # all_pops has no monomorphic sites
             stats["monomorphic_sites"][pop] = data.allele_counts[pop].count_non_segregating()
 
-    return stats
+            # Three way statistics
+            other_pops = [pop_name for pop_name in pop_names if pop_name not in ["all_pops", pop]]
+            t, b = allel.patterson_f3(data.allele_counts[pop],
+                                      data.allele_counts[other_pops[0]],
+                                      data.allele_counts[other_pops[1]])
+            stats["f3"][pop] = np.sum(t) / np.sum(b)
 
-
-def two_way_stats(data):
-    """
-    Calculates divergence, fst and f2 statistics for each population comparison.
-
-    Arguments
-    ---------
-    data: Named tuple of results (made by collate_results function)
-
-    Returns
-    ---------
-    Nested dictionary of statistics
-    """
-    stats = {
-        "divergence": {},
-        "fst": {},
-        "f2": {},
-    }
-
-    for comparison in ["domestic_wild", "domestic_captive",
-                       "wild_captive"]:  # Could be possible to add popA vs popB & popC
+    # Two way statistics
+    for comparison in ["domestic_wild", "domestic_captive", "wild_captive"]:
         p = comparison.split("_")
         stats["divergence"][comparison] = allel.sequence_divergence(data.positions,
                                                                     data.allele_counts[p[0]],
@@ -127,7 +108,30 @@ def two_way_stats(data):
         stats["fst"][comparison] = np.sum(num) / np.sum(den)
         stats["f2"][comparison] = allel.patterson_f2(data.allele_counts[p[0]], data.allele_counts[p[1]]).mean()
 
+    return stats
 
+
+def ld_stats(data):
+    """
+    Calculates LD related statistics, ROH and R2
+    :param data: Data named tuple created by collate data function
+    :return: Nested dictionary of statistics
+    """
+    stats = {
+        "roh": {},
+        "r2": {},
+    }
+
+    pop_names = ["domestic", "wild", "captive", "all_pops"]
+
+    for pop in pop_names:
+        roh_ = roh(data.genotypes[pop], data.positions)
+        stats["roh"][pop] = {"mean": roh_.mean(),
+                             "iqr": iqr(roh_)}
+
+        r2_ = binned_r2(data.genotypes[pop].to_n_alt(), data.positions, data.seq_length,
+                        [0, 0.5e6, 1e6, 2e6, 4e6], ["0_0.5mb", "0.5_1e6", "1_2mb", "2_4mb"])
+        stats["r2"][pop] = r2_.groupby("bins")["r2"].median().to_dict()
 
     return stats
 
@@ -229,46 +233,29 @@ def pca(genotypes_012, subpops):
     :returns pd.DataFrame
     """
     genotypes_012 = sim.utils.monomorphic_012_filter(genotypes_012)
-
     genotypes_012 = sim.utils.ld_prune(genotypes_012)
+
     coords, model = allel.pca(genotypes_012, n_components=2, scaler='patterson')
 
-    pops = []
-    for pop in ["domestic", "wild", "captive"]:
-        pops.append(np.repeat(pop, len(subpops[pop])))
-
-    pops = np.concatenate(pops)
-
     pca_data = pd.DataFrame({"pc1": coords[:, 0],
-                       "pc2": coords[:, 1],
-                       "population": pops})
+                             "pc2": coords[:, 1],
+                             "population": ""})
+
+    for pop in ["domestic", "wild", "captive"]:
+        pca_data.loc[subpops[pop], "population"] = pop
 
     return pca_data
 
 
-def pca_one_way_stats(pca_data):
+def pca_stats(pca_data):
     """
-    Calculates the median and iqr of the populations, separately and combined.
+    Calculates the median and iqr of the populations, separately and combined, as well as the
+    the pairwise distances between the medians.
+
     :param pca_data: pca data (produced by pca function)
     :return: nested dictionary of pca statistics for each population
     """
-    # Append "all_pops" so we can groupby
-    pca_data_all_pops = pca_data.copy()
-    pca_data_all_pops["population"] = "all_pops"
-    pca_data = pca_data.append(pca_data_all_pops)
-
-    stats = pca_data.groupby("population").agg((np.median, iqr))
-    stats.columns = ['_'.join(col).strip() for col in stats.columns.values]
-    stats = stats.to_dict()
-    return stats
-
-
-
-def pca_two_way_stats(pca_data):
-    """ Calculates the pairwise distances between the medians from the output of the pca function above.
-    :param pca_data, pca data (can be made using pca function above)
-    :returns nested dictionary of statistics
-    """
+    # Pairwise median comparisons
     comparisons = [("domestic", "wild"), ("domestic", "captive"), ("wild", "captive")]
     medians = pca_data.groupby(["population"])[["pc1", "pc2"]].median()
 
@@ -278,51 +265,38 @@ def pca_two_way_stats(pca_data):
         for pc in ["pc1", "pc2"]:
             stats[f"{pc}_median_dist"][f"{comp[0]}_{comp[1]}"] = abs(medians[pc][comp[0]] - medians[pc][comp[1]])
 
+
+    # Individual medians and iqr
+    pca_data_all_pops = pca_data.copy()
+    pca_data_all_pops["population"] = "all_pops"  # Append "all_pops" so we can groupby
+    pca_data = pca_data.append(pca_data_all_pops)
+
+    stats_df = pca_data.groupby("population").agg((np.median, iqr))
+    stats_df.columns = ['_'.join(col).strip() for col in stats_df.columns.values]
+    stats = {**stats, **stats_df.to_dict()}
+
     return stats
 
 
-def collected_summaries(tree_seqs):
-    # TODO update function once thought best way to do it with elfi.
-    print("Warning currently deprecated")
+def elfi_summary(data_array):
+
+    """
+    Calculates summary statistics on a list of data.
+    :param data_array, np.array of Results objects
+    :returns np array of summary statistics with summary statistics as columns and rows as observations
+
+    """
     results = []
-    """
-    Added for elfi
-    # TODO: add documentation
-    """
 
-    # Calculate summary statistics
-    def pca_pipeline(genotypes_, pos, pop_list):
-        genotypes_, pos = maf_filter(genotypes_, pos)
-        genotypes_ = genotypes_.to_n_alt()  # 012 with ind as cols
-        genotypes_, pos = ld_prune(genotypes_, pos)
-        pca_stats_dict = pca_stats(genotypes_, pop_list)
-        return pca_stats_dict
+    for data in data_array[0]:
+        pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
+        pca_ss = pca_stats(pca_data)
+        trad_ss = traditional_stats(data)
+        ld_ss = ld_stats(data)
 
-    seq_length = int(tree_seqs[0].get_sequence_length())
-
-    for tree_seq in tree_seqs:
-        genotypes_ = genotypes(tree_seq)  # scikit-allel format
-        pos = positions(tree_seq)
-        nodes = sampled_nodes(tree_seq)
-        pops = pop_list(tree_seq)
-
-        # Using a list to call function in for loop so we can use try/except (in case any functions fail)
-        summary_functions = [
-            tskit_stats(tree_seq, nodes),
-            afs_stats(tree_seq, nodes),
-            # TODO: add these back in
-            # r2_stats(tree_seq, sampled_nodes, [0, 1e6, 2e6, 4e6], ["0_1Mb", "1_2Mb", "2_4Mb"]),
-            # roh_stats(genotypes_, pos, pops, seq_length),  # No longer works due to NetworkX 2.0 clash of requirements with elfi
-            pca_pipeline(genotypes, pos, pop_list),
-        ]
-
-        # stats_dict = {"random_seed": sim.random_seed}  # Random seed acts as ID
-        stats_dict = {}
-
-        for func in summary_functions:
-            stat = func
-            stats_dict = {**stats_dict, **stat}
-
-        results.append(list(stats_dict.values()))
+        collated_ss = {**pca_ss, **trad_ss, **ld_ss}
+        collated_ss = sim.utils.flatten_dict(collated_ss)
+        collated_ss = np.array(list(collated_ss.values()))
+        results.append(collated_ss)
 
     return np.array(results)
