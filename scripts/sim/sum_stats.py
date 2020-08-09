@@ -3,12 +3,13 @@ The summary statistics here are calculated on the output of the simulations. The
 the data object needed for calculating summary statistics (has genotypes, positions, allele_counts etc.)
 """
 
-from scipy.stats import iqr, pearsonr
+from scipy.stats import iqr
 import numpy as np
 import pandas as pd
 import allel
 import sim.utils
 import tskit
+import logging
 
 
 def binned_sfs_mean(ac, bin_no=5):
@@ -279,24 +280,28 @@ def pca_stats(pca_data):
 
 
 def elfi_summary(data_array):
-
     """
-    Calculates summary statistics on a list of data.
+    Calculates summary statistics on a numpy array of data with shape (batch_size, 1).
     :param data_array, np.array of Results objects
     :returns np array of summary statistics with summary statistics as columns and rows as observations
 
     """
+    import warnings
     results = []
-
-    for data in data_array[0]:
-        pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
-        pca_ss = pca_stats(pca_data)
+    data_array = np.atleast_2d(data_array)
+    data_array = data_array[:, 0]  # first col is everything needed (in a Results class)
+    warnings.warn("Some summaries removed to keep things quick!")
+    for data in data_array:
+        data.allelify()  # Convert to scikit allel format
+        #pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
+        #pca_ss = pca_stats(pca_data)
         trad_ss = traditional_stats(data)
-        ld_ss = ld_stats(data)
+        #ld_ss = ld_stats(data)
 
-        collated_ss = {**pca_ss, **trad_ss, **ld_ss}
+        collated_ss = {**trad_ss}  # **pca_ss, **ld_ss}
         collated_ss = sim.utils.flatten_dict(collated_ss)
         collated_ss = np.array(list(collated_ss.values()))
         results.append(collated_ss)
 
-    return np.array(results)
+    return np.array(results)[:, [1, 10, 40, 50]]
+

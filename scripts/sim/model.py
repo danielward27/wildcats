@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass
 import allel
 from collections import namedtuple
-import sim.utils as utils
+import logging
 
 @dataclass
 class SeqFeatures:
@@ -95,9 +95,11 @@ class WildcatSimulation:
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
         try:
+            logging.debug(command)  # Can set logging level to DEBUG to see
             subprocess.check_output(['bash', command_f], stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL)  # See https://bit.ly/3fMIWcE
             tree_seq = pyslim.load(self._decap_trees_filename)
+
         finally:  # Ensure files are cleaned up even if above fails
             os.remove(command_f)
             os.remove(self._decap_trees_filename)
@@ -187,8 +189,10 @@ class WildcatSimulation:
         np.random.seed(self.random_seed)
         samples = []
         for pop_num in range(0, 3):
+
             sampled_inds = np.random.choice(np.where(pop == pop_num)[0], replace=False,
                                             size=sample_sizes[pop_num])
+
             sampled_nodes = nodes[sampled_inds].ravel()
             samples.append(sampled_nodes)
 
@@ -237,7 +241,7 @@ class Results:
     """
         Collates results from the simulation in a format ideal for scikit-allel analysis.
         :param tree_seq:
-        :return: named tuple of data, returning dicts of data (for each population)
+        :return: Results object with attributes calculated
     """
     def __init__(self, tree_seq):
         self.genotypes = None
@@ -252,6 +256,19 @@ class Results:
         all_pops_genotypes = genotypes(tree_seq)
         positions = np.array([variant.position for variant in tree_seq.variants()])
 
+        subpops = {
+            'domestic': np.where(pops == 0)[0],
+            'wild': np.where(pops == 1)[0],
+            'captive': np.where(pops == 2)[0],
+            'all_pops': pops
+        }
+
+        allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
+
+        # Numpyfy objects so pickle-able
+        all_pops_genotypes = np.array(all_pops_genotypes)
+        allele_counts = {key: np.array(value) for key, value in allele_counts.items()}
+
         genotypes_ = {
             "domestic": all_pops_genotypes[:, pops == 0, :],
             "wild": all_pops_genotypes[:, pops == 1, :],
@@ -259,20 +276,18 @@ class Results:
             "all_pops": all_pops_genotypes,
         }
 
-        subpops = {
-            'domestic': np.where(pops == 0)[0],
-            'wild': np.where(pops == 1)[0],
-            'captive': np.where(pops == 2)[0],
-            'all_pops': np.arange(len(pops))
-        }
-
-        allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
-
         self.genotypes = genotypes_
         self.positions = positions
         self.subpops = subpops
         self.allele_counts = allele_counts
         self.seq_length = int(tree_seq.get_sequence_length())
+
+    def allelify(self):
+        """
+        Updates genotypes and allele counts array to scikit-allel wrappers
+        """
+        self.genotypes = {key: allel.GenotypeArray(value) for key, value in self.genotypes.items()}  # Numpy -> allel
+        self.allele_counts = {key: allel.AlleleCountsArray(value) for key, value in self.allele_counts.items()}
 
 
 def genotypes(tree_seq):
@@ -287,119 +302,51 @@ def genotypes(tree_seq):
     return allel_genotypes
 
 
-def run_sim(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
-            pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
-            captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
-            mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
-            bottleneck_time_domestic, bottleneck_strength_domestic, random_state):
+def elfi_sim(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
+             pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
+             captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
+             mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
+             bottleneck_time_domestic, bottleneck_strength_domestic, random_state,
+             batch_size):
     """
     Runs the simulation "vectorised" in a way that works with elfi.
+    Lists of parameters should be of length batch_size. Length, recombination rate and mutation rate
+    are assumed to be fixed.
 
-    :param length: sequence length in bp
-    :param recombination_rate: recombination rate per base pair
-    :param mutation_rate: mutation rate per base pair
-    :param pop_size_domestic_1: domestic population size initially used in slim
-    :param pop_size_wild_1: wild population size initially used in slim
-    :param pop_size_captive: captive population size established at captive_time
-    :param mig_rate_captive: migration rate into the captive population from the wild population
-    :param mig_length_wild: length in generations from present that migration domestic -> wild starts
-    :param mig_rate_wild: migration rate from domestic into captive population
-    :param captive_time: Time in generations ago that the captive population is established
-    :param pop_size_domestic_2: Ancient (pre-bottleneck) domestic population size
-    :param pop_size_wild_2: Ancient (pre-bottleneck) wild population size
-    :param div_time: Divergence time between domestic cats and wildcats (lybica and silvestris)
-    :param mig_rate_post_split: Migration rate post divergence
-    :param mig_length_post_split: Number of generations post split migration occurs for
-    :param bottleneck_time_wild: Wild bottleneck (corresponding to migrating to Britain
-    :param bottleneck_strength_wild:
-    :param bottleneck_time_domestic:
-    :param bottleneck_strength_domestic:
-    :param random_state: np.RandomState object
-    :return: np.array of data named tuples
-    """
-    # Constant sequence features
-    seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
-    sim = WildcatSimulation(seq_features=seq_features, random_seed=random_state.get_state()[1][0])
-
-    # Run simulation with different param values
-    # run slim
-    slim_param_dict = {
-        "pop_size_domestic_1": int(pop_size_domestic_1),
-        "pop_size_wild_1": int(pop_size_wild_1),
-        "pop_size_captive": int(pop_size_captive),
-        "mig_rate_captive": mig_rate_captive,
-        "mig_length_wild": int(mig_length_wild),
-        "mig_rate_wild": mig_rate_wild,
-        "captive_time": int(captive_time)
-    }
-
-    command = sim.slim_command(slim_param_dict)
-    decap_trees = sim.run_slim(command)
-
-    # run msprime
-    recapitate_parameters = {
-        'pop_size_domestic_2': int(pop_size_domestic_2),
-        'pop_size_wild_2': int(pop_size_wild_2),
-        'bottleneck_time_wild': int(bottleneck_time_wild),
-        'bottleneck_strength_wild': int(bottleneck_strength_wild),
-        'bottleneck_time_domestic': int(bottleneck_time_domestic),
-        'bottleneck_strength_domestic': int(bottleneck_strength_domestic),
-        'mig_rate_post_split': mig_rate_post_split,
-        'mig_length_post_split': int(mig_length_post_split),
-        'div_time': int(div_time),
-    }
-
-    demographic_events = sim.demographic_model(**recapitate_parameters)
-    tree_seq = sim.recapitate(decap_trees, demographic_events)
-
-    # Take samples to match number of samples to the WGS data
-    samples = sim.sample_nodes(tree_seq, [5, 30, 10])
-    tree_seq = tree_seq.simplify(samples=samples)
-    data = Results(tree_seq)
-
-    return np.array(data)
-
-
-def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, pop_size_wild_1,
-                pop_size_captive, mig_rate_captive, mig_length_wild, mig_rate_wild,
-                captive_time, pop_size_domestic_2, pop_size_wild_2, div_time, mig_rate_post_split,
-                mig_length_post_split, bottleneck_time_wild, bottleneck_strength_wild,
-                bottleneck_time_domestic, bottleneck_strength_domestic, random_state,
-                batch_size):
-    """
-    Runs the simulation "vectorised" in a way that works with elfi
-
-    :param length: sequence length in bp
-    :param recombination_rate: recombination rate per base pair
-    :param mutation_rate: mutation rate per base pair
-    :param pop_size_domestic_1: domestic population size initially used in slim
-    :param pop_size_wild_1: wild population size initially used in slim
-    :param pop_size_captive: captive population size established at captive_time
-    :param mig_rate_captive: migration rate into the captive population from the wild population
-    :param mig_length_wild: length in generations from present that migration domestic -> wild starts
-    :param mig_rate_wild: migration rate from domestic into captive population
-    :param captive_time: Time in generations ago that the captive population is established
-    :param pop_size_domestic_2: Ancient (pre-bottleneck) domestic population size
-    :param pop_size_wild_2: Ancient (pre-bottleneck) wild population size
-    :param div_time: Divergence time between domestic cats and wildcats (lybica and silvestris)
-    :param mig_rate_post_split: Migration rate post divergence
-    :param mig_length_post_split: Number of generations post split migration occurs for
-    :param bottleneck_time_wild: Wild bottleneck (corresponding to migrating to Britain
-    :param bottleneck_strength_wild:
-    :param bottleneck_time_domestic:
-    :param bottleneck_strength_domestic:
+    :param length: int, sequence length in bp
+    :param recombination_rate: int, recombination rate per base pair
+    :param mutation_rate: int, mutation rate per base pair
+    :param pop_size_domestic_1: list, domestic population size initially used in slim
+    :param pop_size_wild_1: list, wild population size initially used in slim
+    :param pop_size_captive: list, captive population size established at captive_time
+    :param mig_rate_captive: list, migration rate into the captive population from the wild population
+    :param mig_length_wild: list, length in generations from present that migration domestic -> wild starts
+    :param mig_rate_wild: list, migration rate from domestic into captive population
+    :param captive_time: list, Time in generations ago that the captive population is established
+    :param pop_size_domestic_2: list, Ancient (pre-bottleneck) domestic population size
+    :param pop_size_wild_2: list, Ancient (pre-bottleneck) wild population size
+    :param div_time: list, Divergence time between domestic cats and wildcats (lybica and silvestris)
+    :param mig_rate_post_split: list, Migration rate post divergence
+    :param mig_length_post_split: list, Number of generations post split migration occurs for
+    :param bottleneck_time_wild: list, Wild bottleneck (corresponding to migrating to Britain
+    :param bottleneck_strength_wild: list, equivalent generations
+    :param bottleneck_time_domestic:list, time bottleneck occurs
+    :param bottleneck_strength_domestic: list, equivalent generations
     :param random_state: np.RandomState object
     :param batch_size: number to run in serial
-    :return: np.array of data named tuples
+    :return: np.array of Results classes
     """
+
     data_list = []
+    seeds = random_state.randint(1, 2 ** 31, batch_size)
 
     # Constant sequence features
     seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
-    sim = WildcatSimulation(seq_features=seq_features, random_seed=random_state.get_state()[1][0])
 
     # Run simulation with different param values
     for i in range(0, batch_size):
+        sim = WildcatSimulation(seq_features=seq_features, random_seed=seeds[i])
+
         # run slim
         slim_param_dict = {
             "pop_size_domestic_1": int(pop_size_domestic_1[i]),
@@ -437,6 +384,7 @@ def run_sim_vec(length, recombination_rate, mutation_rate, pop_size_domestic_1, 
 
         data_list.append(data)
 
-    return np.atleast_2d(data_list)
+    data_array = np.atleast_2d(data_list).reshape(-1, 1)
+    return data_array
 
 
