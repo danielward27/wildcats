@@ -1,9 +1,38 @@
 
+library(tidyverse)
+# Plot prior compared to posterior kde plot
+smc_res = read_csv("../output/smc_posterior.csv")
+smc_res = smc_res %>% pivot_longer(-"weights", names_to="parameter")
+
+smc_pdf = read_csv("../output/prior_pdf.csv")
+
+ggplot() +
+  facet_wrap(~parameter,scales = "free") +
+  geom_density(data=smc_res, aes(x=value, weight=weights, colour="steelblue4"), ) +
+  geom_line(data=smc_pdf, aes(x, value, colour="red"),
+            inherit.aes = FALSE) +
+  guides(col=guide_legend("Distribution")) +
+  scale_color_hue(labels = c("Prior", "Posterior")) +
+  theme_bw()
+
+
+
+
+
 #---- Imports ----
 library(reticulate)
 library(EasyABC)
 library(glue)
 library(tictoc)
+
+
+
+
+
+
+
+
+
 use_condaenv("wildcats_summer_env")
 sim <- import("sim.model")
 

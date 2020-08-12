@@ -10,6 +10,7 @@ import allel
 import scipy
 import matplotlib.pyplot as plt
 import seaborn as sns
+import logging
 
 
 def flatten_dict(d, sep='_'):
@@ -25,6 +26,7 @@ def flatten_dict(d, sep='_'):
     ------------
     dict
     """
+
     def items():
         for key, value in d.items():
             if isinstance(value, dict):
@@ -149,7 +151,7 @@ def test_prior(df):
         assert np.all(df[pop] >= samp_size), "{} smaller than expected sample size {}".format(pop, samp_size)
 
     assert np.all(df[["captive_time", "mig_length_wild"]] < 500), "SLiM event scheduled > 500 generations ago"
-    
+
     mig_rates = df[[col for col in list(df) if "mig_rate" in col]]
     assert np.all(mig_rates >= 0) & np.all(mig_rates <= 1)
 
@@ -174,7 +176,7 @@ def test_adding_seq_errors():
         for mutation in site.mutations:
             assert mutation.node in tree_seq.get_samples()
     print("{} mutations added only above sample nodes".format(tree_seq.num_mutations))
-    print("Expected ~{} mutations".format(50*10e3*1e-2))
+    print("Expected ~{} mutations".format(50 * 10e3 * 1e-2))
 
 
 def get_params(dictionary, function):
@@ -185,18 +187,25 @@ def get_params(dictionary, function):
 
 class ScaledDist:
     """Handles scaling of distributions for elfi (to ensure matrix is well-conditioned).
-    Currently only supports scipy distributions with a loc and scale parameter.
-    I have checked normal, uniform and lognormal work as intended.
+    Worth checking with the plot method that the scaling works as intended. I have checked
+    normal, uniform, lognormal and truncnormal work as intended (i.
     sampling: The frozen distribution that should be passed to the elfi prior
     target: The actual frozen distribution we want to be passed to the simulator"""
 
     def __init__(self, sampling, target):
 
-        if type(sampling.dist) is not type(target.dist):
+        if not isinstance(sampling.dist, type(target.dist)):
             raise ValueError("The sampling distribution and target distribution should be the same type.")
 
-        if len(sampling.kwds) is 0 or len(target.kwds) is 0:
+        if len(sampling.args) != 0 or len(target.args) != 0:
             raise ValueError("The parameters should be provided as keyword arguments.")
+
+        samp_non_loc_scale_kwds = {k: v for k, v in sampling.kwds.items() if k not in ["loc", "scale"]}
+        targ_non_loc_scale_kwds = {k: v for k, v in target.kwds.items() if k not in ["loc", "scale"]}
+
+        if samp_non_loc_scale_kwds != targ_non_loc_scale_kwds:
+            logging.warning("There is a mismatch in the parameters other than loc and scale, "
+                            "which could cause incorrect scaling")
 
         if isinstance(sampling.dist, scipy.stats._continuous_distns.lognorm_gen):
             if sampling.kwds["s"] != target.kwds["s"]:
@@ -225,12 +234,12 @@ class ScaledDist:
         sample = self.sampling.rvs(100000)
         scaled_sample = self.scale_up_samples(sample)
 
-        plot_prior(self.target, x_lab, label="target")
+        plot_dist(self.target, x_lab, label="target")
         sns.kdeplot(scaled_sample, bw=0.1, label="scaled samples kde")
         return plt.plot()
 
 
-def plot_prior(continous_dist, x_lab="", **kwargs):
+def plot_dist(continous_dist, x_lab="", **kwargs):
     """
     Plots a pdf of a continuous varaiable.
     :param continous_dist: scipy.stats frozen continuous distribution
@@ -245,5 +254,3 @@ def plot_prior(continous_dist, x_lab="", **kwargs):
     plt.ylabel("Probability density")
 
     return plt.plot()
-
-

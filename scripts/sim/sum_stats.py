@@ -279,10 +279,11 @@ def pca_stats(pca_data):
     return stats
 
 
-def elfi_summary(data_array, quick_mode=False):
+def elfi_summary(data_array, scaler=None, quick_mode=False):
     """
     Calculates summary statistics on a numpy array of data with shape (batch_size, 1).
     :param data_array, np.array of Results objects
+    :param scaler, scikit learn standard scaler to transform summary statistics
     :param quick_mode, bool, if True, only calculates traditional statistics, not PCA or LD ones.
     :returns np array of summary statistics with summary statistics as columns and rows as observations
     """
@@ -295,17 +296,22 @@ def elfi_summary(data_array, quick_mode=False):
 
         trad_ss = traditional_stats(data)
 
-        if not quick_mode:
+        if quick_mode:
+            logging.debug("Quick mode is activated")
+            collated_ss = trad_ss
+        else:
             pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
             pca_ss = pca_stats(pca_data)
             ld_ss = ld_stats(data)
             collated_ss = {**trad_ss, **pca_ss, **ld_ss}
-        else:
-            collated_ss = trad_ss
 
         collated_ss = sim.utils.flatten_dict(collated_ss)
         collated_ss = np.array(list(collated_ss.values()))
         results.append(collated_ss)
 
-    return np.array(results)
+    results = np.array(results)
+    if scaler is not None:
+        results = scaler.transform(results)
+
+    return results
 

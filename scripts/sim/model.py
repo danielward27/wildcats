@@ -95,10 +95,13 @@ class WildcatSimulation:
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
         try:
-            logging.debug(command)  # Can set logging level to DEBUG to see
+            logging.debug(f"Running Command {command}")  # Can set logging level to DEBUG to see
             subprocess.check_output(['bash', command_f], stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL)  # See https://bit.ly/3fMIWcE
             tree_seq = pyslim.load(self._decap_trees_filename)
+
+        except subprocess.CalledProcessError:
+            raise subprocess.CalledProcessError(f"Running slim failed with command {command}")
 
         finally:  # Ensure files are cleaned up even if above fails
             os.remove(command_f)
@@ -302,8 +305,6 @@ def genotypes(tree_seq):
     return allel_genotypes
 
 
-
-
 def elfi_sim(
         bottleneck_strength_domestic,
         bottleneck_strength_wild,
@@ -322,8 +323,9 @@ def elfi_sim(
         pop_size_wild_1,
         pop_size_wild_2,
         length, recombination_rate, mutation_rate,
-        scale_dist_dict=None,
-        random_state, batch_size,
+        scaled_dist_dict=None,
+        random_state=np.random.RandomState(),
+        batch_size=1,
 ):
     """
     Runs the simulation "vectorised" in a way that works with elfi.
@@ -349,24 +351,38 @@ def elfi_sim(
     :param length: int, sequence length in bp
     :param recombination_rate: int, recombination rate per base pair
     :param mutation_rate: int, mutation rate per base pair
-    :param scale_dist_dict: A dictionary of sim.utils.ScaledDists, which is used to scale the
+    :param scaled_dist_dict: A dictionary of sim.utils.ScaledDists, which is used to scale the
            parameters up to the target distribution. keys should match corresponding parameter names.
     :param random_state: np.RandomState object
     :param batch_size: number to run in serial
+
     :return: np.array of Results classes
     """
-    # Do not define locals above this if statement
-    if scale_dist_dict is not None:
-        # Scale up values
-        kwargs = locals()
-        priors["div_time"].scale_up_samples(1)  # This format should should work...
-        pass
+    # Do not define locals above this.
+    params = locals()
 
+    slim_param_names = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
+                        "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
 
+    recapitate_param_names = ["pop_size_domestic_2", "pop_size_wild_2", "bottleneck_time_wild",
+                              "bottleneck_strength_wild", "bottleneck_time_domestic", "bottleneck_strength_domestic",
+                              "mig_rate_post_split", "mig_length_post_split", "div_time"]
+
+    param_names = slim_param_names + recapitate_param_names
+
+    params = {key: val for key, val in params.items() if key in param_names}
+
+    if scaled_dist_dict is not None:
+        for name, scaler in scaled_dist_dict.items():
+            params[name] = scaler.scale_up_samples(params[name])
+
+    # Convert int params to int
+    for key, val in params.items():
+        if "mig_rate" not in key:
+            params[key] = np.rint(val).astype(int)
 
     data_list = []
     seeds = random_state.randint(1, 2 ** 31, batch_size)
-
 
     # Constant sequence features
     seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
@@ -375,34 +391,13 @@ def elfi_sim(
     for i in range(0, batch_size):
         sim = WildcatSimulation(seq_features=seq_features, random_seed=seeds[i])
 
-        # run slim
-        slim_param_dict = {
-            "pop_size_domestic_1": int(pop_size_domestic_1[i]),
-            "pop_size_wild_1": int(pop_size_wild_1[i]),
-            "pop_size_captive": int(pop_size_captive[i]),
-            "mig_rate_captive": mig_rate_captive[i],
-            "mig_length_wild": int(mig_length_wild[i]),
-            "mig_rate_wild": mig_rate_wild[i],
-            "captive_time": int(captive_time[i])
-        }
+        slim_param_dict = {key: val[i] for key, val in params.items() if key in slim_param_names}
+        recapitate_param_dict = {key: val[i] for key, val in params.items() if key in recapitate_param_names}
 
         command = sim.slim_command(slim_param_dict)
         decap_trees = sim.run_slim(command)
 
-        # run msprime
-        recapitate_parameters = {
-            'pop_size_domestic_2': int(pop_size_domestic_2[i]),
-            'pop_size_wild_2': int(pop_size_wild_2[i]),
-            'bottleneck_time_wild': int(bottleneck_time_wild[i]),
-            'bottleneck_strength_wild': int(bottleneck_strength_wild[i]),
-            'bottleneck_time_domestic': int(bottleneck_time_domestic[i]),
-            'bottleneck_strength_domestic': int(bottleneck_strength_domestic[i]),
-            'mig_rate_post_split': mig_rate_post_split[i],
-            'mig_length_post_split': int(mig_length_post_split[i]),
-            'div_time': int(div_time[i]),
-        }
-
-        demographic_events = sim.demographic_model(**recapitate_parameters)
+        demographic_events = sim.demographic_model(**recapitate_param_dict)
         tree_seq = sim.recapitate(decap_trees, demographic_events)
 
         # Take samples to match number of samples to the WGS data
