@@ -235,7 +235,7 @@ class ScaledDist:
         scaled_sample = self.scale_up_samples(sample)
 
         plot_dist(self.target, x_lab, label="target")
-        sns.kdeplot(scaled_sample, bw=0.1, label="scaled samples kde")
+        sns.kdeplot(scaled_sample, bw=0.1, gridsize=200, label="scaled samples kde", )
         return plt.plot()
 
 

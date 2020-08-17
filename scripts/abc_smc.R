@@ -1,19 +1,52 @@
 
 library(tidyverse)
+library(corrplot)
 # Plot prior compared to posterior kde plot
+
+plot_densities = function(posterior, pdf, obs=NULL){
+  # Plots the marginal posterior densities (kernal density estimation)
+  # against the prior pdfs.
+  # posterior: df with cols parameter, value and weights
+  # pdf: df of densities with cols parameter, x, value
+  # obs: (pseudo) observed parameter values in df with cols pameter, 
+  p = ggplot() +
+    facet_wrap(~parameter, scales = "free") +
+    geom_density(data=posterior, aes(x=value, weight=weights, colour="steelblue4"), ) +
+    geom_line(data=pdf, aes(x, value, colour="red"),
+              inherit.aes = FALSE) +
+    guides(col=guide_legend("Distribution")) +
+    scale_color_hue(labels = c("Prior", "Posterior")) +
+    theme_bw()
+  if (!is.null(obs)){
+    p = p + geom_vline(data=obs, aes(xintercept=value))
+  }
+  return(p)
+}
+
+
 smc_res = read_csv("../output/smc_posterior.csv")
-smc_res = smc_res %>% pivot_longer(-"weights", names_to="parameter")
+smc_res_long = smc_res %>% pivot_longer(-"weights", names_to="parameter")
 
 smc_pdf = read_csv("../output/prior_pdf.csv")
 
-ggplot() +
-  facet_wrap(~parameter,scales = "free") +
-  geom_density(data=smc_res, aes(x=value, weight=weights, colour="steelblue4"), ) +
-  geom_line(data=smc_pdf, aes(x, value, colour="red"),
-            inherit.aes = FALSE) +
-  guides(col=guide_legend("Distribution")) +
-  scale_color_hue(labels = c("Prior", "Posterior")) +
-  theme_bw()
+y_obs = c(
+  3000.0, 10000.0, 3000.0, 
+  3000.0, 20.0, 20000.0,
+  1000.0, 20.0, 0.01, 0.1,
+  0.01, 100.0, 100.0, 100.0,
+  100.0, 100.0
+)
+
+y_obs = data.frame(parameter=sort(unique(smc_res_long$parameter)), value=y_obs)
+
+p = plot_densities(smc_res_long, smc_pdf, y_obs)
+ggsave("../plots/marginal_posterior_densities.png",
+       width = 12, height = 7)
+
+smc_res %>%
+  select(-"weights") %>%
+  cor() %>%
+  corrplot(type = "lower", method = "square", tl.col = "black")
 
 
 

@@ -95,13 +95,13 @@ class WildcatSimulation:
         with open(command_f, 'w') as f:  # Running from file limits 'quoting games' (see SLiM manual pg. 425).
             f.write(command)
         try:
-            logging.debug(f"Running Command {command}")  # Can set logging level to DEBUG to see
+            logging.info(f"Running command: {command}")  # Can set logging level to INFO to see
             subprocess.check_output(['bash', command_f], stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL)  # See https://bit.ly/3fMIWcE
             tree_seq = pyslim.load(self._decap_trees_filename)
 
         except subprocess.CalledProcessError:
-            raise subprocess.CalledProcessError(f"Running slim failed with command {command}")
+            raise ValueError(f"Running slim failed with command {command}")
 
         finally:  # Ensure files are cleaned up even if above fails
             os.remove(command_f)
