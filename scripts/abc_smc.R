@@ -1,21 +1,9 @@
 library(reticulate)
-priors = py_load_object("../output/priors.pkl")
-
-# Get params
-
-priors[["div_time"]]$target$pdf(40000)
-
-
-
-list(priors)
-
-priors$bottleneck_strength_domestic$target$rvs(100L)
-
-iterate(priors$iteritems(), print)
-
 library(tidyverse)
 library(corrplot)
-# Plot prior compared to posterior kde plot
+
+
+# Plot prior compared to posterior kde
 
 plot_densities = function(posterior, pdf, obs=NULL){
   # Plots the marginal posterior densities (kernal density estimation)
@@ -38,22 +26,63 @@ plot_densities = function(posterior, pdf, obs=NULL){
 }
 
 
+priors = py_load_object("../output/priors.pkl")
+posterior = py_load_object("../output/smc_posterior.pkl")
+
+param_names = posterior$parameter_names
+
+# Prior pdf evaluations
+pdf_evaluations = tibble()
+for (param in param_names){
+  prior = priors[[param]]$target
+  xlims = prior$ppf(c(0.001, 0.999))
+  x = seq(xlims[1], xlims[2], length.out = 1000)
+  value = prior$pdf(x)
+  df = tibble(x, value)
+  df$parameter = param
+  pdf_evaluations = bind_rows(pdf_evaluations, df)
+}
+
+posterior_df = data.frame(posterior$samples)
+
+# Scale up samples from sampling distribution to values used in simulator
+for (param in param_names){
+  posterior_df[param] = priors[[param]]$scale_up_samples(posterior_df[param])
+}
+
+posterior_df$weights = posterior$weights
+posterior_df_long = posterior_df %>% pivot_longer(-"weights", names_to="parameter")
+
+
+y_obs = c(3000, 30000,3000, 4000, 20, 35000, 1000,
+          20, 0.005, 0.1, 0.005, 100, 200, 200, 500, 500)
+y_obs = data.frame(parameter=param_names, value=y_obs)
+p = plot_densities(posterior_df_long, pdf_evaluations, y_obs)
+p
+
+ggsave("../plots/marginal_posterior_densities.png",
+       width = 12, height = 7)
+
+
+
+
+
+
+
+###########################################################################
 smc_res = read_csv("../output/smc_posterior.csv")
 smc_res_long = smc_res %>% pivot_longer(-"weights", names_to="parameter")
 
 smc_pdf = read_csv("../output/prior_pdf.csv")
 
-y_obs = c(
-  3000.0, 10000.0, 3000.0, 
-  3000.0, 20.0, 20000.0,
-  1000.0, 20.0, 0.01, 0.1,
-  0.01, 100.0, 100.0, 100.0,
-  100.0, 100.0
-)
 
-y_obs = data.frame(parameter=sort(unique(smc_res_long$parameter)), value=y_obs)
+
+y_obs = c(3000, 30000,3000, 4000, 20, 35000, 1000,
+          20, 0.005, 0.1, 0.005, 100, 200, 200, 500, 500)
+y_obs = data.frame(parameter=param_names, value=y_obs)
 
 p = plot_densities(smc_res_long, smc_pdf, y_obs)
+p
 ggsave("../plots/marginal_posterior_densities.png",
        width = 12, height = 7)
 

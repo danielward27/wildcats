@@ -38,14 +38,14 @@ y_obs = elfi_sim(
         div_time=[35000],
         mig_length_post_split=[1000],
         mig_length_wild=[20],
-        mig_rate_captive=[0.01],
+        mig_rate_captive=[0.005],
         mig_rate_post_split=[0.1],
-        mig_rate_wild=[0.01],
+        mig_rate_wild=[0.005],
         pop_size_captive=[100],
         pop_size_domestic_1=[200],
         pop_size_domestic_2=[200],
-        pop_size_wild_1=[200],
-        pop_size_wild_2=[200],
+        pop_size_wild_1=[500],
+        pop_size_wild_2=[500],
         length=int(10e6),
         recombination_rate=1.8e-8,
         mutation_rate=6e-8,
@@ -65,8 +65,8 @@ d = elfi.Distance('euclidean', s, name='d', model=m)
 
 # Rejection to "train" sum stat scaler
 pool = elfi.OutputPool(['s'])
-rej = elfi.Rejection(m['d'], batch_size=4, seed=1, pool=pool, max_parallel_batches=64)
-rej_res = rej.sample(100, quantile=1, bar=False)  # Accept all
+rej = elfi.Rejection(m['d'], batch_size=8, seed=1, pool=pool, max_parallel_batches=128)
+rej_res = rej.sample(1000, quantile=1, bar=False)  # Accept all
 store = pool.get_store('s')
 sum_stats = np.array(list(store.values()))
 sum_stats = sum_stats.reshape(-1, sum_stats.shape[2])  # Drop batches axis
@@ -78,8 +78,8 @@ elapsed_time = time.time() - start_time
 logging.info(f"Rej completed at {elapsed_time/60:.2f} minutes.")
 
 # Run SMC
-smc = elfi.SMC(m['d'], batch_size=5, seed=2, max_parallel_batches=64)
-N = 1000
+smc = elfi.SMC(m['d'], batch_size=8, seed=2, max_parallel_batches=128)
+N = 5000
 schedule = [12, 11, 10, 9]
 smc_res = smc.sample(N, schedule)
 
