@@ -17,6 +17,7 @@ from dataclasses import dataclass
 import allel
 from collections import namedtuple
 import logging
+import tskit
 
 @dataclass
 class SeqFeatures:
@@ -240,21 +241,39 @@ def tree_summary(tree_seq):
 Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts, seq_length")  # Define outside function so pickle works
 
 
-class Results:
+class GenotypeData:
     """
-        Collates results from the simulation in a format ideal for scikit-allel analysis.
-        :param tree_seq:
-        :return: Results object with attributes calculated
+        Collates results from the simulation or real data in a format ideal for scikit-allel analysis.
+        :param tree_seq: tskit tree sequence, to generate results from simulations
+        :param callset: scikit allel callset dictionary (from allel.read_vcf) for using real data
+        :param subpops: dictionary of subpop names and corresponding indexes in genotypes when using callset
+        :param seq_length: length of sequence when using callset
+        :return: GenotypeData object with attributes calculated
     """
-    def __init__(self, tree_seq):
+    def __init__(self, tree_seq=None, callset=None, subpops=None, seq_length=None):
         self.genotypes = None
         self.positions = None
-        self.subpops = None
         self.allele_counts = None
-        self.seq_length = None
-        self._initialize(tree_seq)
+        self.subpops = subpops
+        self.seq_length = seq_length
 
-    def _initialize(self, tree_seq):
+        if tree_seq is None and callset is None:
+            raise ValueError("Either tree_seq or callset must be specified")
+
+        if tree_seq is not None and callset is not None:
+            raise ValueError("Only one of tree_seq or callset should be specified")
+
+        if tree_seq is not None:
+            self._initialize_from_tree_seq(tree_seq)
+        else:
+            self._initialize_from_callset(callset)
+
+    def _initialize_from_tree_seq(self, tree_seq):
+        if self.subpops is not None:
+            logging.warning("Ignoring subpops parameter, using tree_seq")
+        if self.seq_length is not None:
+            logging.warning("Ignoring seq_length parameter, using tree_seq")
+
         pops = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
         all_pops_genotypes = genotypes(tree_seq)
         positions = np.array([variant.position for variant in tree_seq.variants()])
@@ -263,21 +282,18 @@ class Results:
             'domestic': np.where(pops == 0)[0],
             'wild': np.where(pops == 1)[0],
             'captive': np.where(pops == 2)[0],
-            'all_pops': pops
+            'all_pops': np.arange(len(pops))
         }
 
         allele_counts = all_pops_genotypes.count_alleles_subpops(subpops)
 
-        # Numpyfy objects so pickle-able
+        # Numpyfy objects so pickle-able (also probably faster parallel support for np.arrays?)
         all_pops_genotypes = np.array(all_pops_genotypes)
         allele_counts = {key: np.array(value) for key, value in allele_counts.items()}
 
-        genotypes_ = {
-            "domestic": all_pops_genotypes[:, pops == 0, :],
-            "wild": all_pops_genotypes[:, pops == 1, :],
-            "captive": all_pops_genotypes[:, pops == 2, :],
-            "all_pops": all_pops_genotypes,
-        }
+        genotypes_ = {}
+        for pop, idx in subpops.items():
+            genotypes_[pop] = all_pops_genotypes[:, idx, :]
 
         self.genotypes = genotypes_
         self.positions = positions
@@ -285,12 +301,32 @@ class Results:
         self.allele_counts = allele_counts
         self.seq_length = int(tree_seq.get_sequence_length())
 
+    def _initialize_from_callset(self, callset):
+        all_pops_genotypes = callset["calldata/GT"]
+        positions = callset["variants/POS"]
+        allele_counts = allel.GenotypeArray(all_pops_genotypes).count_alleles_subpops(self.subpops)
+
+        # Numpyfy objects so pickle-able
+        all_pops_genotypes = np.array(all_pops_genotypes)
+        allele_counts = {key: np.array(value) for key, value in allele_counts.items()}
+
+        genotypes_ = {}
+        for pop, idx in self.subpops.items():
+            genotypes_[pop] = all_pops_genotypes[:, idx, :]
+
+        self.genotypes = genotypes_
+        self.positions = positions
+        self.allele_counts = allele_counts
+
+
     def allelify(self):
         """
         Updates genotypes and allele counts array to scikit-allel wrappers
         """
         self.genotypes = {key: allel.GenotypeArray(value) for key, value in self.genotypes.items()}  # Numpy -> allel
         self.allele_counts = {key: allel.AlleleCountsArray(value) for key, value in self.allele_counts.items()}
+
+
 
 
 def genotypes(tree_seq):
@@ -356,7 +392,7 @@ def elfi_sim(
     :param random_state: np.RandomState object
     :param batch_size: number to run in serial
 
-    :return: np.array of Results classes
+    :return: np.array of GenotypeData classes
     """
     # Do not define locals above this.
     params = locals()
@@ -403,7 +439,7 @@ def elfi_sim(
         # Take samples to match number of samples to the WGS data
         samples = sim.sample_nodes(tree_seq, [5, 30, 10])
         tree_seq = tree_seq.simplify(samples=samples)
-        data = Results(tree_seq)
+        data = GenotypeData(tree_seq)
 
         data_list.append(data)
 

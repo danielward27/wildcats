@@ -254,3 +254,5 @@ def plot_dist(continous_dist, x_lab="", **kwargs):
     plt.ylabel("Probability density")
 
     return plt.plot()
+
+

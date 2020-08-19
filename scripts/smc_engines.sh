@@ -10,4 +10,4 @@ cd $PBS_O_WORKDIR
 conda activate wildcats_summer_env
 
 sleep 30  # Ensure controller job has time to get running
-mpiexec -n 32 ipengine --profile=pbs
+mpiexec -n 64 ipengine --profile=pbs

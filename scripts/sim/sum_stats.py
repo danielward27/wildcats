@@ -282,14 +282,14 @@ def pca_stats(pca_data):
 def elfi_summary(data_array, scaler=None, quick_mode=False):
     """
     Calculates summary statistics on a numpy array of data with shape (batch_size, 1).
-    :param data_array, np.array of Results objects
+    :param data_array, np.array of GenotypeData objects
     :param scaler, scikit learn standard scaler to transform summary statistics
     :param quick_mode, bool, if True, only calculates traditional statistics, not PCA or LD ones.
     :returns np array of summary statistics with summary statistics as columns and rows as observations
     """
     results = []
     data_array = np.atleast_2d(data_array)
-    data_array = data_array[:, 0]  # first col is everything needed (in a Results class)
+    data_array = data_array[:, 0]  # first col is everything needed (in a GenotypeData class)
 
     for data in data_array:
         data.allelify()  # Convert to scikit allel format

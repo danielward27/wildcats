@@ -1,3 +1,17 @@
+library(reticulate)
+priors = py_load_object("../output/priors.pkl")
+
+# Get params
+
+priors[["div_time"]]$target$pdf(40000)
+
+
+
+list(priors)
+
+priors$bottleneck_strength_domestic$target$rvs(100L)
+
+iterate(priors$iteritems(), print)
 
 library(tidyverse)
 library(corrplot)
