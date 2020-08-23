@@ -11,6 +11,8 @@ import scipy
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
+import pickle
+from sim.model import GenotypeData
 
 
 def flatten_dict(d, sep='_'):
@@ -186,9 +188,9 @@ def get_params(dictionary, function):
 
 
 class ScaledDist:
-    """Handles scaling of distributions for elfi (to ensure matrix is well-conditioned).
+    """Handles scaling of prior distributions for elfi (to ensure matrix is well-conditioned).
     Worth checking with the plot method that the scaling works as intended. I have checked
-    normal, uniform, lognormal and truncnormal work as intended (i.
+    normal, uniform, lognormal and truncnormal work as intended.
     sampling: The frozen distribution that should be passed to the elfi prior
     target: The actual frozen distribution we want to be passed to the simulator"""
 
@@ -225,34 +227,56 @@ class ScaledDist:
         samples = samples * self.target.kwds["scale"] + self.target.kwds["loc"]
         return samples
 
-    def plot(self, x_lab=""):
+    def plot(self, x_lab="", show_scaled_kde=False):
         """
-        Plots disthandler object. Plots the target distribution against
-        a kernal density estimate of a scaled up sample from the sampling distribution.
-        Useful for checking scaling is functioning as expected.
+        Plots ScaledDist object target distribution.
+        :param x_lab: x-label
+        :param show_scaled_kde: Adds a kernal density estimate of a scaled up sample from the sampling distribution.
+               Useful for checking scaling matches the target distribution.
         """
-        sample = self.sampling.rvs(100000)
-        scaled_sample = self.scale_up_samples(sample)
+        plot_dist(self.target, x_lab, label="target", color="black")
 
-        plot_dist(self.target, x_lab, label="target")
-        sns.kdeplot(scaled_sample, bw=0.1, gridsize=200, label="scaled samples kde", )
+        if show_scaled_kde:
+            sample = self.sampling.rvs(100000)
+            scaled_sample = self.scale_up_samples(sample)
+            sns.kdeplot(scaled_sample, bw=0.1, gridsize=200, label="scaled samples kde")
         return plt.plot()
 
 
-def plot_dist(continous_dist, x_lab="", **kwargs):
+def plot_dist(continuous_dist, x_lab="", **kwargs):
     """
     Plots a pdf of a continuous varaiable.
-    :param continous_dist: scipy.stats frozen continuous distribution
+    :param continuous_dist: scipy.stats frozen continuous distribution
+    :param x_lab, x-label string
     :return: plot
     """
-    x_lims = continous_dist.ppf([0.001, 0.999])
+    x_lims = continuous_dist.ppf([0.001, 0.999])
     x = np.linspace(x_lims[0], x_lims[1], 1000)
-    y = continous_dist.pdf(x)
-    plt.plot(x, y, "r-", **kwargs)
+    y = continuous_dist.pdf(x)
+    plt.plot(x, y, **kwargs)
     plt.subplots_adjust(left=0.2, bottom=0.2)
     plt.xlabel(x_lab)
     plt.ylabel("Probability density")
 
     return plt.plot()
 
+
+def pickle_real_data():
+    """
+    Function takes the vcf and sample info and makes a pickled GenotypeData object.
+    Mostly just here in case I have to do it again for another chromosome so I have the code ready..."
+    """
+    callset = allel.read_vcf("../data/e3_phased.vcf")
+    pop = pd.read_csv("../data/e3_sample_info.csv", usecols=["SOURCE"])["SOURCE"].str.lower().to_numpy().ravel()
+
+    subpops = {}
+    for pop_name in np.unique(pop):
+        subpops[pop_name] = np.where(pop == pop_name)[0]
+
+    subpops["all_pops"] = np.arange(len(pop))
+
+    y_obs = GenotypeData(callset=callset, subpops=subpops, seq_length=44648284)
+
+    with open("../data/e3_phased.pkl", "wb") as f:
+        pickle.dump(y_obs, f)
 

@@ -200,6 +200,13 @@ def binned_r2(genotypes, pos, seq_length, bins, labels,
     max_bin = bins[-1]
     min_bin = bins[0]
 
+    if max_bin >= seq_length:
+        raise ValueError("Cannot specify a bin length greater than the sequence length")
+    if max_bin / seq_length > 0.25:
+        logging.warning(f"Focal mutations are drawn from a small proportion ({(seq_length-max_bin)/seq_length:.2f})"
+                        f"of the genome. A large maximum bin value may have reserved too much space for"
+                        f"mutations for comparison. It may be worth using a smaller maximum bin width.")
+
     # Find max index to ensure "room" for mutations to compare
     max_idx = np.where(seq_length - max_bin < pos)[0].min()
 
@@ -297,7 +304,7 @@ def elfi_summary(data_array, scaler=None, quick_mode=False):
         trad_ss = traditional_stats(data)
 
         if quick_mode:
-            logging.debug("Quick mode is activated")
+            logging.info("Quick mode is activated")
             collated_ss = trad_ss
         else:
             pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)

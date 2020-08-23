@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import allel
 from collections import namedtuple
 import logging
-import tskit
+
 
 @dataclass
 class SeqFeatures:
@@ -174,12 +174,10 @@ class WildcatSimulation:
         Samples nodes of individuals from the extant populations, which can then be used for simplification.
         Warning: Node IDs are not kept consistent during simplify!.
 
-        Arguments
-        ---------------
-        tree_seq, tskit.tree_sequence: tree sequence object
-        sample_sizes, list: a list of length 3, with each element giving the sample size
+        param: tree_seq, tskit.tree_sequence: tree sequence object
+        param: sample_sizes, list: a list of length 3, with each element giving the sample size
         for the domestic, wildcat and captive cat population respectively.
-        concatenate, bool: If False, samples for each population are kept in seperate items in the list.
+        param: concatenate, bool: If False, samples for each population are kept in seperate items in the list.
 
         Returns
         ------------
@@ -238,12 +236,10 @@ def tree_summary(tree_seq):
     print("Sequence length: {}".format(tree_seq.sequence_length))
 
 
-Data = namedtuple("Data", "genotypes, positions, subpops, allele_counts, seq_length")  # Define outside function so pickle works
-
-
 class GenotypeData:
     """
         Collates results from the simulation or real data in a format ideal for scikit-allel analysis.
+        Genotype values greater than one when using a callset are set to 1 (i.e. assuming biallelic).
         :param tree_seq: tskit tree sequence, to generate results from simulations
         :param callset: scikit allel callset dictionary (from allel.read_vcf) for using real data
         :param subpops: dictionary of subpop names and corresponding indexes in genotypes when using callset
@@ -265,14 +261,15 @@ class GenotypeData:
 
         if tree_seq is not None:
             self._initialize_from_tree_seq(tree_seq)
-        else:
+
+        if callset is not None:
             self._initialize_from_callset(callset)
 
     def _initialize_from_tree_seq(self, tree_seq):
         if self.subpops is not None:
-            logging.warning("Ignoring subpops parameter, using tree_seq")
+            logging.warning("Ignoring subpops parameter, using info in tree_seq")
         if self.seq_length is not None:
-            logging.warning("Ignoring seq_length parameter, using tree_seq")
+            logging.warning("Ignoring seq_length parameter, using info in tree_seq")
 
         pops = np.array([tree_seq.individual(i).population for i in tree_seq.individuals_alive_at(0)])
         all_pops_genotypes = genotypes(tree_seq)
@@ -303,6 +300,8 @@ class GenotypeData:
 
     def _initialize_from_callset(self, callset):
         all_pops_genotypes = callset["calldata/GT"]
+
+        all_pops_genotypes[np.where(all_pops_genotypes > 1)] = 1  # Assume biallelic
         positions = callset["variants/POS"]
         allele_counts = allel.GenotypeArray(all_pops_genotypes).count_alleles_subpops(self.subpops)
 
@@ -318,15 +317,12 @@ class GenotypeData:
         self.positions = positions
         self.allele_counts = allele_counts
 
-
     def allelify(self):
         """
         Updates genotypes and allele counts array to scikit-allel wrappers
         """
         self.genotypes = {key: allel.GenotypeArray(value) for key, value in self.genotypes.items()}  # Numpy -> allel
         self.allele_counts = {key: allel.AlleleCountsArray(value) for key, value in self.allele_counts.items()}
-
-
 
 
 def genotypes(tree_seq):
@@ -418,7 +414,7 @@ def elfi_sim(
             params[key] = np.rint(val).astype(int)
 
     data_list = []
-    seeds = random_state.randint(1, 2 ** 31, batch_size)
+    seeds = random_state.randint(1, 2**31-1, batch_size)
 
     # Constant sequence features
     seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
@@ -445,5 +441,3 @@ def elfi_sim(
 
     data_array = np.atleast_2d(data_list).reshape(-1, 1)
     return data_array
-
-

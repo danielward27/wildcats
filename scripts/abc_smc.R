@@ -1,8 +1,9 @@
+#---- Imports ----
 library(reticulate)
 library(tidyverse)
 library(corrplot)
 
-
+#---- Functions ----
 # Plot prior compared to posterior kde
 
 plot_densities = function(posterior, pdf, obs=NULL){
@@ -26,10 +27,12 @@ plot_densities = function(posterior, pdf, obs=NULL){
 }
 
 
+#---- Load in data ----
 priors = py_load_object("../output/priors.pkl")
 posterior = py_load_object("../output/smc_posterior.pkl")
-
 param_names = posterior$parameter_names
+
+#---- Format data for plotting ----
 
 # Prior pdf evaluations
 pdf_evaluations = tibble()
@@ -54,185 +57,33 @@ posterior_df$weights = posterior$weights
 posterior_df_long = posterior_df %>% pivot_longer(-"weights", names_to="parameter")
 
 
+posterior$summary(all=TRUE)
+
 y_obs = c(3000, 30000,3000, 4000, 20, 35000, 1000,
-          20, 0.005, 0.1, 0.005, 100, 200, 200, 500, 500)
+          20, 0.05, 0.1, 0.05, 100, 200, 200, 500, 500)
 y_obs = data.frame(parameter=param_names, value=y_obs)
+
+#---- Plots ----
+# Density plot
 p = plot_densities(posterior_df_long, pdf_evaluations, y_obs)
 p
 
 ggsave("../plots/marginal_posterior_densities.png",
        width = 12, height = 7)
 
+# corrplot
+par(xpd=TRUE)
+png(height=8, width=6, units = "in", res=600, file="../plots/smc_posterior_corrplot.png")
 
-
-
-
-
-
-###########################################################################
-smc_res = read_csv("../output/smc_posterior.csv")
-smc_res_long = smc_res %>% pivot_longer(-"weights", names_to="parameter")
-
-smc_pdf = read_csv("../output/prior_pdf.csv")
-
-
-
-y_obs = c(3000, 30000,3000, 4000, 20, 35000, 1000,
-          20, 0.005, 0.1, 0.005, 100, 200, 200, 500, 500)
-y_obs = data.frame(parameter=param_names, value=y_obs)
-
-p = plot_densities(smc_res_long, smc_pdf, y_obs)
-p
-ggsave("../plots/marginal_posterior_densities.png",
-       width = 12, height = 7)
-
-smc_res %>%
+posterior_df %>%
   select(-"weights") %>%
   cor() %>%
-  corrplot(type = "lower", method = "square", tl.col = "black")
+  corrplot(type = "lower", method = "square", tl.col = "black", tl.cex = 0.7,
+           mar = c(0, 0, 0, 2))
+
+dev.off()
 
 
 
-
-
-#---- Imports ----
-library(reticulate)
-library(EasyABC)
-library(glue)
-library(tictoc)
-
-
-
-
-
-
-
-
-
-use_condaenv("wildcats_summer_env")
-sim <- import("sim.model")
-
-run_sim_parallel <- function(x) {
-  # Small wrapper function to run the simulation from R.
-  # EasyABC has no way to export variables or functions to clusters,
-  # So we have to do things a bit weirdly.
-  
-  #---- Imports ----
-  library(reticulate)
-  library(EasyABC)
-  library(glue)
-  library(tictoc)
-  use_condaenv("wildcats_summer_env")
-  sim <- import("sim.model")
-  
-  #---- Helper functions and variables ----
-  param_names = names(x)
-  
-  Xn <- function(param){
-    # Returns "Xn" string, where n is replaced with index of parameter
-    idx = which(param_names==param)
-    Xn = paste0("X", idx)
-    return(Xn)
-  }
-  
-  param_names = c(
-    "random_seed", "pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive", "captive_time",
-    "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "pop_size_domestic_2", "pop_size_wild_2",
-    "bottleneck_time_domestic", "bottleneck_strength_domestic", "bottleneck_time_wild", "bottleneck_strength_wild",
-    "mig_length_post_split", "mig_rate_post_split", "div_time", "seq_length", "recombination_rate", "mutation_rate"
-  )
-  
-  #---- Run simulation ----
-  names(x) = param_names
-  param_list <- lapply(split(x, names(x)), unname)  # Named list (gets converted to python dict)
-  sum_stats <- sim$run_sim(param_list)
-  sum_stats <- unlist(sum_stats)
-  
-  return(sum_stats)
-}
-
-print_prior_summary <- function(prior_list){
-  function_mappings = c("normal"=rnorm, "unif"=runif, "lognormal"=rlnorm)
-  for (i in 1:length(prior)){
-    param = names(prior[i])
-    
-    dist_name = prior[[i]][1]
-    dist_args = prior[[i]][-1]
-    dist_args = as.list(c(100, as.numeric(dist_args)))
-    dist_func = as.function(function_mappings[[dist_name]])
-    sample = do.call(dist_func, dist_args)
-    
-    print(param)
-    print(dist_name)
-    print(summary(sample))
-    cat("\n")
-  }
-}
-
-#---- Example "pod" ----
-
-example_param_vec = c(1, 100, 100, 100, 40,0.1,20,0.1,400, 400, 30000, 0.1,
-                      5000, 3000, 10000, 3000, 20000, 5000000, 1.8e-8, 6e-8)
-example_target = run_sim_parallel(example_param_vec)
-
-#---- Prior ----
-prior=list(
-  "pop_size_domestic_1" = c("unif", 100, 1000), ## Changed
-  "pop_size_wild_1" = c("lognormal", 8, 0.4),
-  "pop_size_captive" = c("lognormal", 4.5, 0.3),
-  "captive_time" = c("lognormal", 3, 0.7),
-  "mig_rate_captive" = c("lognormal", -4, 1),
-  "mig_length_wild" = c("lognormal", 3, 0.7),
-  "mig_rate_wild" = c("lognormal", -3, 1),
-  "pop_size_domestic_2" =  c("unif", 1000, 2000), ## Changed
-  "pop_size_wild_2" = c("lognormal", 8.8, 0.2),
-  "bottleneck_time_domestic" = c("normal", 3500, 600),
-  "bottleneck_strength_domestic" = c("unif", 0, 40000),
-  "bottleneck_time_wild" = c("normal", 3500, 600),
-  "bottleneck_strength_wild" = c("unif", 0, 40000),
-  "mig_length_post_split" = c("unif", 0, 10000),
-  "mig_rate_post_split" = c("unif", 0, 0.1),
-  "div_time" = c("normal", 40000, 5000),
-  "seq_length" = c("unif", 10e6, 10e6),
-  "recombination_rate" = c("unif", 1.8e-8, 1.8e-8),
-  "mutation_rate" = c("unif", 6e-8, 6e-8)
-  )
-
-print_prior_summary(prior)
-
-prior = unname(prior)
-
-#---- Run rejection algorithm ----
-set.seed(4)
-tic("Sequential - 30 cores:")
-ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
-                               summary_stat_target=example_target, use_seed = TRUE,
-                               n_cluster = 20, tolerance_tab=c(1.5e15, 1.4e15))
-print(toc(log=TRUE))
-
-tic("Sequential - 20 cores:")
-ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
-                               summary_stat_target=example_target, use_seed = TRUE,
-                               n_cluster = 10, tolerance_tab=c(1.5e15, 1.4e15))
-print(toc(log=TRUE))
-
-
-tic("Sequential - 10 cores:")
-ABC_beaumont <- ABC_sequential(method = "Beaumont", model=run_sim_parallel, prior=prior, nb_simul=15,
-                          summary_stat_target=example_target, use_seed = TRUE,
-                          n_cluster = 5, tolerance_tab=c(1.5e15, 1.4e15))
-print(toc(log=TRUE))
-
-
-
-
-# prior_test = glue('{Xn("div_time")} > {Xn("mig_rate_post_split")}')
-#glue('{Xn("mig_rate_post_split")} > 0')
-#Xn("mig_rate_post_split")
-
-#glue('{Xn("div_time")} > {Xn("mig_rate_post_split")}')
-
-#Xn("bottleneck_time_wild")
-#glue('{Xn("div_time")} > 50')
-
+posterior$summary(all=TRUE)
 

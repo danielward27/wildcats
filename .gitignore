@@ -4,6 +4,7 @@ data/
 logs/
 .idea/
 output/
+scripts/old/
 notes/
 plots/*
 !plots/model_schematic.png
