@@ -1,7 +1,7 @@
 #!/bin/bash
 # request resources:
 #PBS -N submitter
-#PBS -l nodes=1:ppn=1
+#PBS -l nodes=1:ppn=1,mem=1mb
 #PBS -l walltime=00:01:00
 #PBS -o ../output/logs/out/
 #PBS -e ../output/logs/error/

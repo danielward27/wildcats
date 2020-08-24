@@ -9,5 +9,5 @@
 cd $PBS_O_WORKDIR
 conda activate wildcats_summer_env
 
-sleep 120  # Ensure engines and controller have time to start
+sleep 10
 python ./run_smc.py

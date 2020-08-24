@@ -6,11 +6,20 @@ from sim.model import elfi_sim
 from sim.sum_stats import elfi_summary
 from sklearn.preprocessing import StandardScaler
 import time
-import subprocess
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
-elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
+
+num_cores = 0
+timeout = time.time() + 601  # seconds
+while num_cores is 0:
+    elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
+    c = elfi.client.get_client()
+    num_cores = c.num_cores
+
+    if time.time() > timeout:
+        raise TimeoutError("Could not find any cores after 600 seconds")
+    time.sleep(30)
 
 try:
     start_time = time.time()
@@ -42,7 +51,7 @@ try:
     # Rejection to "train" sum stat scaler
     pool = elfi.OutputPool(['s'])
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1, pool=pool)
-    rej_res = rej.sample(100, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(50, quantile=1, bar=False)  # Accept all
     store = pool.get_store('s')
     sum_stats = np.array(list(store.values()))
     sum_stats = sum_stats.reshape(-1, sum_stats.shape[2])  # Drop batches axis
@@ -55,7 +64,7 @@ try:
 
     # Using rejection just to get an idea of tolerances:
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1)
-    rej_res = rej.sample(1000, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(100, quantile=1, bar=False)  # Accept all
     np.save("../output/distances.npy", rej_res.discrepancies)
 
     # TODO: Replace rejection above with SMC below once figured out ideal tolerances and increase rej sample size.

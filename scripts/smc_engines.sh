@@ -1,12 +1,12 @@
 #!/bin/bash
 # request resources:
 #PBS -N engines
-#PBS -l nodes=10:ppn=16
-#PBS -l walltime=12:00:00
+#PBS -l nodes=12:ppn=8,pmem=8gb
+#PBS -l walltime=04:00:00
 #PBS -o ../output/logs/out/
 #PBS -e ../output/logs/error/
 
 cd $PBS_O_WORKDIR
 conda activate wildcats_summer_env
 
-mpiexec -n 100 ipengine --profile=pbs --quiet
+mpiexec -n 96 ipengine --profile=pbs --quiet
