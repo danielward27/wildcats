@@ -21,6 +21,8 @@ while num_cores is 0:
         raise TimeoutError("Could not find any cores after 600 seconds")
     time.sleep(30)
 
+logging.info(f"Ipyparallel client started with {num_cores} cores.")
+
 try:
     start_time = time.time()
 
@@ -51,7 +53,7 @@ try:
     # Rejection to "train" sum stat scaler
     pool = elfi.OutputPool(['s'])
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1, pool=pool)
-    rej_res = rej.sample(50, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(5, quantile=1, bar=False)  # Accept all
     store = pool.get_store('s')
     sum_stats = np.array(list(store.values()))
     sum_stats = sum_stats.reshape(-1, sum_stats.shape[2])  # Drop batches axis
@@ -64,7 +66,7 @@ try:
 
     # Using rejection just to get an idea of tolerances:
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1)
-    rej_res = rej.sample(100, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(5, quantile=1, bar=False)  # Accept all
     np.save("../output/distances.npy", rej_res.discrepancies)
 
     # TODO: Replace rejection above with SMC below once figured out ideal tolerances and increase rej sample size.
