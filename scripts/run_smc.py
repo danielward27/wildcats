@@ -10,20 +10,20 @@ import time
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
-num_cores = 0
-timeout = time.time() + 601  # seconds
-while num_cores is 0:
-    elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
-    c = elfi.client.get_client()
-    num_cores = c.num_cores
-
-    if time.time() > timeout:
-        raise TimeoutError("Could not find any cores after 600 seconds")
-    time.sleep(30)
-
-logging.info(f"Ipyparallel client started with {num_cores} cores.")
-
 try:
+    num_cores = 0
+    timeout = time.time() + 601  # seconds
+    while num_cores is 0:
+        elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
+        c = elfi.client.get_client()
+        num_cores = c.num_cores
+
+        if time.time() > timeout:
+            raise TimeoutError("Could not find any cores after 600 seconds")
+        time.sleep(30)
+
+    logging.info(f"Ipyparallel client started with {num_cores} cores.")
+
     start_time = time.time()
 
     with open("../output/priors.pkl", "rb") as f:  # Priors specified in priors.py
@@ -53,7 +53,7 @@ try:
     # Rejection to "train" sum stat scaler
     pool = elfi.OutputPool(['s'])
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1, pool=pool)
-    rej_res = rej.sample(5, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(62, quantile=1, bar=False)  # Accept all
     store = pool.get_store('s')
     sum_stats = np.array(list(store.values()))
     sum_stats = sum_stats.reshape(-1, sum_stats.shape[2])  # Drop batches axis
@@ -66,7 +66,7 @@ try:
 
     # Using rejection just to get an idea of tolerances:
     rej = elfi.Rejection(m['d'], batch_size=1, seed=1)
-    rej_res = rej.sample(5, quantile=1, bar=False)  # Accept all
+    rej_res = rej.sample(62, quantile=1, bar=False)  # Accept all
     np.save("../output/distances.npy", rej_res.discrepancies)
 
     # TODO: Replace rejection above with SMC below once figured out ideal tolerances and increase rej sample size.

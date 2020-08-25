@@ -202,10 +202,11 @@ def binned_r2(genotypes, pos, seq_length, bins, labels,
 
     if max_bin >= seq_length:
         raise ValueError("Cannot specify a bin length greater than the sequence length")
-    if max_bin / seq_length > 0.25:
-        logging.warning(f"Focal mutations are drawn from a small proportion ({(seq_length-max_bin)/seq_length:.2f})"
-                        f"of the genome. A large maximum bin value may have reserved too much space for"
-                        f"mutations for comparison. It may be worth using a smaller maximum bin width.")
+
+    if (seq_length-max_bin)/seq_length < 0.25:
+        logging.warning(f"Focal mutations are drawn from a small proportion ({(seq_length-max_bin)/seq_length:.2f}) "
+                        f"of the genome. A large maximum bin value may have reserved too much space for "
+                        f"mutations for comparison. It may be worth using a smaller maximum bin width. ")
 
     # Find max index to ensure "room" for mutations to compare
     max_idx = np.where(seq_length - max_bin < pos)[0].min()
