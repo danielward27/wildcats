@@ -11,8 +11,6 @@ import scipy
 import matplotlib.pyplot as plt
 import seaborn as sns
 import logging
-import pickle
-from sim.model import GenotypeData
 
 
 def flatten_dict(d, sep='_'):
@@ -58,25 +56,24 @@ def monomorphic_012_filter(genotypes_012, pos=None):
         return genotypes_012[~mono]
 
 
-def maf_filter(allel_genotypes, pos=None, threshold=1, verbosity=0):
+def maf_filter(genotypes, pos=None, threshold=1, verbosity=0):
     """Remove minor alleles from genotypes and positions attributes.
     By default returns an scikit-allel 012 matrix (individuals as columns).
 
     Arguments
     -------------
-    allel_genotypes: allel.GenotypeArray (3D)
+    genotypes: allel.GenotypeArray (3D)
     pos: positions array
     threshold: int, minor allele count threshold (default removes singletons)
     verbosity: int, If >0 prints how many variants retained
     """
-    genotypes = allel_genotypes
     allele_counts = genotypes.count_alleles()
-    maf_filter = allele_counts.min(axis=1) > threshold
+    maf_filter_ = allele_counts.min(axis=1) > threshold
 
-    genotypes = genotypes.compress(maf_filter, axis=0)
+    genotypes = genotypes.compress(maf_filter_, axis=0)
 
     if verbosity > 0:
-        print("maf_filter: Retaining: {}  out of {} variants".format(np.sum(maf_filter), len(maf_filter)))
+        print("maf_filter: Retaining: {}  out of {} variants".format(np.sum(maf_filter_), len(maf_filter_)))
 
     if pos is not None:
         pos = pos[maf_filter]
@@ -261,22 +258,4 @@ def plot_dist(continuous_dist, x_lab="", **kwargs):
     return plt.plot()
 
 
-def pickle_real_data():
-    """
-    Function takes the vcf and sample info and makes a pickled GenotypeData object.
-    Mostly just here in case I have to do it again for another chromosome so I have the code ready..."
-    """
-    callset = allel.read_vcf("../data/e3_phased.vcf")
-    pop = pd.read_csv("../data/e3_sample_info.csv", usecols=["SOURCE"])["SOURCE"].str.lower().to_numpy().ravel()
-
-    subpops = {}
-    for pop_name in np.unique(pop):
-        subpops[pop_name] = np.where(pop == pop_name)[0]
-
-    subpops["all_pops"] = np.arange(len(pop))
-
-    y_obs = GenotypeData(callset=callset, subpops=subpops, seq_length=44648284)
-
-    with open("../data/e3_phased.pkl", "wb") as f:
-        pickle.dump(y_obs, f)
 

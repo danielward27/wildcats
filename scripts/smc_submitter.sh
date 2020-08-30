@@ -9,6 +9,12 @@
 cd $PBS_O_WORKDIR
 conda activate wildcats_summer_env
 
+# Give some extra time to the controller as it waits for engines to start
 controller=$(qsub smc_controller.sh)
 engines=$(qsub -W depend=after:$controller smc_engines.sh)
 python_script=$(qsub -W depend=after:$engines smc_python_script.sh)
+
+# The below order also works, but have to be careful that engines don't timeout before controller starts...
+# engines=$(qsub smc_engines.sh)
+# controller=$(qsub -W depend=after:$engines smc_controller.sh)
+# python_script=$(qsub -W depend=after:$controller smc_python_script.sh)

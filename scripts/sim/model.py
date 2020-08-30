@@ -17,6 +17,8 @@ from dataclasses import dataclass
 import allel
 from collections import namedtuple
 import logging
+import elfi
+from sim.sum_stats import elfi_summary
 
 
 @dataclass
@@ -336,7 +338,6 @@ def genotypes(tree_seq):
     allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
     return allel_genotypes
 
-
 def elfi_sim(
         bottleneck_strength_domestic,
         bottleneck_strength_wild,
@@ -393,6 +394,7 @@ def elfi_sim(
     # Do not define locals above this.
     params = locals()
 
+    # Restarting client to avoid memory memory leak https://github.com/ipython/ipyparallel/issues/207
     slim_param_names = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
                         "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
 
@@ -413,6 +415,9 @@ def elfi_sim(
         if "mig_rate" not in key:
             params[key] = np.rint(val).astype(int)
 
+    for key, val in params.items():
+        logging.info(f"Param {key} = {val}")
+
     data_list = []
     seeds = random_state.randint(1, 2**31-1, batch_size)
 
@@ -427,17 +432,35 @@ def elfi_sim(
         recapitate_param_dict = {key: val[i] for key, val in params.items() if key in recapitate_param_names}
 
         command = sim.slim_command(slim_param_dict)
-        decap_trees = sim.run_slim(command)
+        tree_seq = sim.run_slim(command)  # Decapitated
 
         demographic_events = sim.demographic_model(**recapitate_param_dict)
-        tree_seq = sim.recapitate(decap_trees, demographic_events)
+        tree_seq = sim.recapitate(tree_seq, demographic_events)
 
         # Take samples to match number of samples to the WGS data
         samples = sim.sample_nodes(tree_seq, [5, 30, 10])
         tree_seq = tree_seq.simplify(samples=samples)
         data = GenotypeData(tree_seq)
+        del tree_seq
 
         data_list.append(data)
 
     data_array = np.atleast_2d(data_list).reshape(-1, 1)
     return data_array
+
+
+def elfi_sim_sum(*args, scaler=None, **kwargs):
+    """
+    Carries out simulation and summary statistic calculation. Having the simulation as a seperate node in elfi meant
+    ipyparallel tried to pickle around the large amount of genotype data and caused data leakage. This allows
+    a single node to be used for simulation and summary statistic calculation.
+    :param args: parameter args passed to elfi_sim (parameters)
+    :param scaler: standard scaler for summary statistics. If none, carries out no scaling.
+    :param kwargs: kwargs passed to elfi_sim (batch size and random state)
+
+    :return: 2d array of summary statistics
+    """
+    data_array = elfi_sim(*args, **kwargs)
+    sum_stats = elfi_summary(data_array, scaler=scaler, quick_mode=False)
+    return sum_stats
+

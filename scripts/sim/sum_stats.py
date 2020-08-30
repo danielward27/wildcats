@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import allel
 import sim.utils
-import tskit
 import logging
 
 
@@ -137,14 +136,16 @@ def ld_stats(data):
     return stats
 
 
-def roh(genotypes, positions):
+def roh(genotypes, positions, max_individuals=np.inf):
     """
-    Calculates runs of homozygosity for a population. Only works for diploid individuals.
+    Calculates runs of homozygosity for a population. Only works for diploid individuals. Note this is quite
+    memory hungary and maybe could be improved (with 20 individuals it uses 1.2GB of memory).
 
     Parameters
     ----------
     genotypes: scikit allel 3d genotypes array shape (variants, individuals, 2)
     positions: np.array of positions corresponding to axis 0 of genotypes (the variants)
+    max_individuals: If more individuals than max_individuals, calculates on a sample of size max_individuals
 
     returns
     -----------
@@ -153,6 +154,12 @@ def roh(genotypes, positions):
     """
     if genotypes.shape[2] is not 2:
         raise ValueError("genotypes.shape[2] should be 2 for diploid individuals")
+
+    n_individuals = genotypes.shape[1]
+    if n_individuals > max_individuals:
+        sample = np.random.randint(low=0, high=n_individuals, size=max_individuals)
+        genotypes = genotypes[:, sample, :]
+
     is_hetero = genotypes[:, :, 0] != genotypes[:, :, 1]
     df = pd.DataFrame(np.cumsum(is_hetero, axis=0))  # Increment roh ID with each heterozygote
     df["position"] = positions
@@ -314,10 +321,12 @@ def elfi_summary(data_array, scaler=None, quick_mode=False):
             collated_ss = {**trad_ss, **pca_ss, **ld_ss}
 
         collated_ss = sim.utils.flatten_dict(collated_ss)
+        collated_ss = dict(sorted(collated_ss.items()))  # Note requires python 3.7+ for ordered dictionary
         collated_ss = np.array(list(collated_ss.values()))
         results.append(collated_ss)
 
     results = np.array(results)
+
     if scaler is not None:
         results = scaler.transform(results)
 
