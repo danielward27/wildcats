@@ -2,7 +2,7 @@
 # request resources:
 #PBS -N controller
 #PBS -l nodes=1:ppn=1
-#PBS -l walltime=12:00:00
+#PBS -l walltime=16:00:00
 #PBS -o ../output/logs/out/
 #PBS -e ../output/logs/error/
 

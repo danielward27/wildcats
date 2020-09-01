@@ -18,7 +18,7 @@ import allel
 from collections import namedtuple
 import logging
 import elfi
-from sim.sum_stats import elfi_summary
+from sim.sum_stats import elfi_sum
 
 
 @dataclass
@@ -338,6 +338,7 @@ def genotypes(tree_seq):
     allel_genotypes = haplotype_array.to_genotypes(ploidy=2)
     return allel_genotypes
 
+
 def elfi_sim(
         bottleneck_strength_domestic,
         bottleneck_strength_wild,
@@ -449,18 +450,5 @@ def elfi_sim(
     return data_array
 
 
-def elfi_sim_sum(*args, scaler=None, **kwargs):
-    """
-    Carries out simulation and summary statistic calculation. Having the simulation as a seperate node in elfi meant
-    ipyparallel tried to pickle around the large amount of genotype data and caused data leakage. This allows
-    a single node to be used for simulation and summary statistic calculation.
-    :param args: parameter args passed to elfi_sim (parameters)
-    :param scaler: standard scaler for summary statistics. If none, carries out no scaling.
-    :param kwargs: kwargs passed to elfi_sim (batch size and random state)
 
-    :return: 2d array of summary statistics
-    """
-    data_array = elfi_sim(*args, **kwargs)
-    sum_stats = elfi_summary(data_array, scaler=scaler, quick_mode=False)
-    return sum_stats
 

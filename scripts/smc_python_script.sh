@@ -1,8 +1,8 @@
 #!/bin/bash
 # request resources:
 #PBS -N python
-#PBS -l nodes=1:ppn=1
-#PBS -l walltime=5:00:00
+#PBS -l nodes=1:ppn=2
+#PBS -l walltime=12:00:00
 #PBS -o ../output/logs/out/
 #PBS -e ../output/logs/error/
 

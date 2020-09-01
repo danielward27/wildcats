@@ -294,12 +294,11 @@ def pca_stats(pca_data):
     return stats
 
 
-def elfi_summary(data_array, scaler=None, quick_mode=False):
+def elfi_sum(data_array):
     """
     Calculates summary statistics on a numpy array of data with shape (batch_size, 1).
     :param data_array, np.array of GenotypeData objects
     :param scaler, scikit learn standard scaler to transform summary statistics
-    :param quick_mode, bool, if True, only calculates traditional statistics, not PCA or LD ones.
     :returns np array of summary statistics with summary statistics as columns and rows as observations
     """
     results = []
@@ -308,17 +307,12 @@ def elfi_summary(data_array, scaler=None, quick_mode=False):
 
     for data in data_array:
         data.allelify()  # Convert to scikit allel format
+        pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
 
         trad_ss = traditional_stats(data)
-
-        if quick_mode:
-            logging.info("Quick mode is activated")
-            collated_ss = trad_ss
-        else:
-            pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
-            pca_ss = pca_stats(pca_data)
-            ld_ss = ld_stats(data)
-            collated_ss = {**trad_ss, **pca_ss, **ld_ss}
+        pca_ss = pca_stats(pca_data)
+        ld_ss = ld_stats(data)
+        collated_ss = {**trad_ss, **pca_ss, **ld_ss}
 
         collated_ss = sim.utils.flatten_dict(collated_ss)
         collated_ss = dict(sorted(collated_ss.items()))  # Note requires python 3.7+ for ordered dictionary
@@ -327,8 +321,16 @@ def elfi_summary(data_array, scaler=None, quick_mode=False):
 
     results = np.array(results)
 
-    if scaler is not None:
-        results = scaler.transform(results)
-
     return results
 
+
+def elfi_sum_scaler(sum_stats, scaler=None):
+    """
+    Scales the summary statistics using standard scaler.
+    sum_stats: np.array to be scaled
+    scaler: scikit-learn standard scaler
+    """
+    if scaler is not None:
+        sum_stats = scaler.transform(sum_stats)
+
+    return sum_stats
