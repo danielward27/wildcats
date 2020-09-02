@@ -7,19 +7,18 @@ from sim.sum_stats import elfi_sum, elfi_sum_scaler
 import pickle
 from sklearn.preprocessing import StandardScaler
 
-job_start_time = time.time()
-
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 seq_length = 44648284  # E3 length is 44648284
-train_scaler_n_sim = 100
-rej_n_sim = 500
+train_scaler_n_sim = 256
+smc_n_samples = 500
 
 logging.info(f"Seq length is set to {seq_length}")
 
 num_cores = 0
 timeout = time.time() + 600  # seconds
+
 while num_cores is 0:
     elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
     c = elfi.client.get_client()
@@ -70,16 +69,16 @@ logging.info(f"{train_scaler_n_sim} simulations to train standard scaler complet
 
 m["sum_scaler"].become(elfi.Summary(elfi_sum_scaler, m["sum"], scaler, model=m))  # Now carries out scaling
 
+# Run SMC
 start_time = time.time()
-rej = elfi.Rejection(m['d'], batch_size=1, seed=2)
-rej_res = rej.sample(rej_n_sim, quantile=1, bar=True)  # Accept all
+smc = elfi.SMC(m['d'], batch_size=1, seed=2)
+schedule = [17, 16, 15]
+smc_res = smc.sample(smc_n_samples, schedule, bar=False)
 elapsed_time = time.time() - start_time
-logging.info(f"{rej_n_sim} simulations for rejection completed in {elapsed_time/60:.2f} minutes")
-np.save("../output/distances.npy", rej_res.discrepancies)
+logging.info(f"SMC completed at {elapsed_time/60:.2f} minutes.")
+
+smc_res.save("../output/smc_posterior.pkl")  # Save results
 
 logging.info(f"Shutting down cluster")
 c = elfi.client.get_client().ipp_client
 c.shutdown(hub=True)  # This does seem to throw an error in the controller, but things do shutdown
-
-job_elapsed_time =  time.time() - job_start_time
-logging.info(f"Job completed in {job_elapsed_time/60:.2f} minutes")

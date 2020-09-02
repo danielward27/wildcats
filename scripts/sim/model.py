@@ -27,7 +27,6 @@ class SeqFeatures:
     length: int         # Length of sequence to simulate in base pairs.
     recombination_rate: float  # Recombination rate per base pair.
     mutation_rate: float     # Mutation rate per base pair.
-    error_rate: float = 0  # Error rate (adds "mutations" per bp)
 
 
 class WildcatSimulation:
@@ -153,13 +152,6 @@ class WildcatSimulation:
         # Overlay mutations
         tree_seq = pyslim.SlimTreeSequence(msprime.mutate(tree_seq, rate=self.seq_features.mutation_rate,
                                                           random_seed=self.random_seed))
-
-        # Add sequencing errors
-        if self.seq_features.error_rate != 0:
-            tree_seq = pyslim.SlimTreeSequence(
-                msprime.mutate(tree_seq, rate=self.seq_features.error_rate, random_seed=self.random_seed,
-                               keep=True, start_time=0, end_time=1)
-            )
 
         tree_seq = tree_seq.simplify()
 

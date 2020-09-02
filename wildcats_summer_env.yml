@@ -20,6 +20,7 @@ dependencies:
   - python=3.7.7
   - networkx=1.11
   - python-graphviz
+  - mpich
   - pip:
     - elfi
     - git+https://github.com/danielward27/scikit-allel
