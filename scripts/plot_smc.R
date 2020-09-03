@@ -56,16 +56,9 @@ for (param in param_names){
 posterior_df$weights = posterior$weights
 posterior_df_long = posterior_df %>% pivot_longer(-"weights", names_to="parameter")
 
-
-posterior$summary(all=TRUE)
-
-y_obs = c(3000, 30000,3000, 4000, 20, 35000, 1000,
-          20, 0.05, 0.1, 0.05, 100, 200, 200, 500, 500)
-y_obs = data.frame(parameter=param_names, value=y_obs)
-
 #---- Plots ----
 # Density plot
-p = plot_densities(posterior_df_long, pdf_evaluations, y_obs)
+p = plot_densities(posterior_df_long, pdf_evaluations)
 p
 
 ggsave("../plots/marginal_posterior_densities.png",
@@ -83,7 +76,6 @@ posterior_df %>%
 
 dev.off()
 
-
-
 posterior$summary(all=TRUE)
+quantile(posterior$discrepancies, 0.35)  # The distances get pretty tight!
 
