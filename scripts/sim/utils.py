@@ -139,34 +139,42 @@ def merge_sum_stats(num_files, filename, output_filename):
 
 # merge_sum_stats(500, "../../output/summary_stats/summary_stats_{}.feather", "../../output/summary_stats.csv")
 
-def test_prior(df):
+def check_params(df):
     """Basic tests to ensure prior not malformed"""
-    assert np.all(df >= 0), "Unexpected negative values in prior_df"
+    if np.any(df < 0):
+        bad_params = df.columns[np.any(df <= 0, axis=0)]
+        raise ValueError(f"Unexpected negative values at parameters {list(bad_params)}")
 
     # Check min pop_sizes are > sample sizes
     samp_size = {"pop_size_domestic_1": 5, "pop_size_wild_1": 30, "pop_size_captive": 10}
-
     for pop, samp_size in samp_size.items():
-        assert np.all(df[pop] >= samp_size), "{} smaller than expected sample size {}".format(pop, samp_size)
+        if np.any(df[pop] <= samp_size):
+            raise ValueError(f"{pop} smaller than expected sample size {samp_size}")
 
-    assert np.all(df[["captive_time", "mig_length_wild"]] < 500), "SLiM event scheduled > 500 generations ago"
+    for slim_gen_param in ["captive_time", "mig_length_wild"]:
+        if np.any(df[slim_gen_param] > 500):
+            raise ValueError(f"SLiM event scheduled > 500 generations ago for parameter {slim_gen_param}")
 
-    mig_rates = df[[col for col in list(df) if "mig_rate" in col]]
-    assert np.all(mig_rates >= 0) & np.all(mig_rates <= 1)
+    for msprime_gen_param in ["div_time", "bottleneck_time_domestic", "bottleneck_time_wild"]:
+        if np.any(df[msprime_gen_param] < 500):
+            print(df[msprime_gen_param])
+            raise ValueError(f"Parameter {msprime_gen_param} had values less than 500")
 
-    cond_1 = np.all(df[["div_time", "bottleneck_time_domestic", "bottleneck_time_wild"]] > 500)
-    cond_2 = np.all(df["div_time"] - df["mig_length_post_split"] > 500)
-    assert np.all([cond_1, cond_2]), "msprime event scheduled < 500 generations ago"
+    if np.any(df["div_time"] - df["mig_length_post_split"] < 500):
+        raise ValueError("div_time - mig_length_post_split was less than 500")
 
-    cond_3 = np.all(df[["bottleneck_time_domestic", "bottleneck_time_wild"]].max(axis=1) < df["div_time"])
-    assert cond_3, "Bottleneck scheduled to occur before divergence"
+    mig_rate_params = [col for col in list(df) if "mig_rate" in col]
+    if np.any(df[mig_rate_params] > 1) | np.any(df[mig_rate_params] < 0):
+        raise ValueError("Migration rate parameter does not fall between 0 and 1")
 
-    print("Looks good!")
+    for bottleneck_param in ["bottleneck_time_domestic", "bottleneck_time_wild"]:
+        if np.any(df[bottleneck_param] > df["div_time"]):
+            raise ValueError(f"{bottleneck_param} scheduled to occur before div_time")
 
 
 def test_adding_seq_errors():
     """A sanity check to make sure method of adding sequencing errors works as expected,
-    i.e. mutations are added above only sample nodes in the tree sequence"""
+    i.e. mutations are added above only sample nodes in the tree sequence. This probably won't be used..."""
     tree_seq = msprime.simulate(sample_size=50, Ne=1000, length=10e3, mutation_rate=0, random_seed=20,
                                 recombination_rate=6e-8)
     # Add sequencing errors

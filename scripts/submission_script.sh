@@ -8,5 +8,5 @@
 #PBS -e ../output/logs/
 # on compute node, change directory to 'submission directory':
 cd $PBS_O_WORKDIR
-conda activate wildcats_summer_env
+conda activate wildcats_env
 python ./run_simulation_parallel.py

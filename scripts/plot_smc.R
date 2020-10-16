@@ -77,5 +77,5 @@ posterior_df %>%
 dev.off()
 
 posterior$summary(all=TRUE)
-quantile(posterior$discrepancies, 0.35)  # The distances get pretty tight!
+quantile(posterior$discrepancies, 0.01)  # The distances get pretty tight!
 

@@ -35,7 +35,7 @@ priors = {
     "pop_size_wild_1": ScaledDist(scipy.stats.lognorm(s=0.2, loc=0, scale=1),
                                   scipy.stats.lognorm(s=0.2, loc=30, scale=np.exp(8.7))),
     "pop_size_wild_2": ScaledDist(scipy.stats.lognorm(s=0.2, loc=0, scale=1),
-                                  scipy.stats.lognorm(s=0.2, loc=30, scale=np.exp(9.2))),
+                                  scipy.stats.lognorm(s=0.2, loc=30, scale=np.exp(9))),
     "pop_size_captive": ScaledDist(scipy.stats.lognorm(s=0.5, loc=0, scale=1),
                                    scipy.stats.lognorm(s=0.5, loc=10, scale=100)),
     "pop_size_domestic_1": ScaledDist(scipy.stats.lognorm(s=0.25, loc=0, scale=1),

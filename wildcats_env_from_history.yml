@@ -1,0 +1,23 @@
+name: wildcats_env
+channels:
+  - defaults
+dependencies:
+  - jupyterlab
+  - scikit-learn
+  - pandas
+  - python=3.8
+  - numpy
+  - msprime
+  - pyarrow
+  - tskit
+  - jupyter_nbextensions_configurator
+  - pip
+  - matplotlib
+  - python-graphviz
+  - scipy
+  - mpich
+  - seaborn
+  - git
+  - pyslim
+  - slim
+prefix: /home/dw16200/miniconda3/envs/wildcats_env

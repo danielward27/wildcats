@@ -10,6 +10,7 @@ between the two populations and a captive wildcat population is established.
 
 import msprime
 import numpy as np
+import pandas as pd
 import pyslim
 import subprocess
 import os
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 import allel
 from collections import namedtuple
 import logging
+from sim.utils import check_params
 import elfi
 from sim.sum_stats import elfi_sum
 
@@ -116,7 +118,7 @@ class WildcatSimulation:
                           bottleneck_time_domestic, bottleneck_strength_domestic):
         """Model for recapitation, including bottlenecks, population size changes and migration.
         Returns list of demographic events sorted in time order. Note that if parameters are drawn from priors this
-        could have unexpected consequences on the demography. sim.utils.test_prior() should mitigate this issue."""
+        could have unexpected consequences on the demography. sim.utils.check_params() should mitigate this issue."""
         domestic, wild = 0, 1
 
         migration_time_2 = div_time-mig_length_post_split
@@ -407,6 +409,8 @@ def elfi_sim(
     for key, val in params.items():
         if "mig_rate" not in key:
             params[key] = np.rint(val).astype(int)
+
+    check_params(pd.DataFrame(params))  # Check for valid parameters
 
     for key, val in params.items():
         logging.info(f"Param {key} = {val}")

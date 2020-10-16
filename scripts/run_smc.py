@@ -11,8 +11,9 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 seq_length = 44648284  # E3 length is 44648284
-train_scaler_n_sim = 256
-smc_n_samples = 400
+train_scaler_n_sim = 128
+smc_n_samples = 1000
+smc_schedule = [17, 16, 15, 14, 13, 12, 11]
 
 logging.info(f"Seq length is set to {seq_length}")
 
@@ -71,9 +72,8 @@ m["sum_scaler"].become(elfi.Summary(elfi_sum_scaler, m["sum"], scaler, model=m))
 
 # Run SMC
 start_time = time.time()
-smc = elfi.SMC(m['d'], batch_size=1, seed=2)
-schedule = [17, 16, 15]
-smc_res = smc.sample(smc_n_samples, schedule, bar=False)
+smc = elfi.SMC(m['d'], batch_size=1, seed=42)
+smc_res = smc.sample(smc_n_samples, smc_schedule, bar=False)
 elapsed_time = time.time() - start_time
 logging.info(f"SMC completed at {elapsed_time/60:.2f} minutes.")
 
@@ -81,4 +81,4 @@ smc_res.save("../output/smc_posterior.pkl")  # Save results
 
 logging.info(f"Shutting down cluster")
 c = elfi.client.get_client().ipp_client
-c.shutdown(hub=True)  # This does seem to throw an error in the controller, but things do shutdown
+c.shutdown(hub=True)

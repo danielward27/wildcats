@@ -86,8 +86,7 @@ def traditional_stats(data):
         stats["expected_heterozygosity"][pop] = allel.heterozygosity_expected(data.allele_counts[pop].to_frequencies(), ploidy=2).mean()
         stats["segregating_sites"] = data.allele_counts[pop].count_segregating()
 
-
-        if pop is not "all_pops":  # all_pops has no monomorphic sites
+        if pop != "all_pops":  # all_pops has no monomorphic sites
             stats["monomorphic_sites"][pop] = data.allele_counts[pop].count_non_segregating()
 
             # Three way statistics
@@ -152,7 +151,7 @@ def roh(genotypes, positions, max_individuals=np.inf):
     np.array of runs of homozygosity
 
     """
-    if genotypes.shape[2] is not 2:
+    if genotypes.shape[2] != 2:
         raise ValueError("genotypes.shape[2] should be 2 for diploid individuals")
 
     n_individuals = genotypes.shape[1]
