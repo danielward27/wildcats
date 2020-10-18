@@ -148,7 +148,7 @@ def check_params(df):
     # Check min pop_sizes are > sample sizes
     samp_size = {"pop_size_domestic_1": 5, "pop_size_wild_1": 30, "pop_size_captive": 10}
     for pop, samp_size in samp_size.items():
-        if np.any(df[pop] <= samp_size):
+        if np.any(df[pop] < samp_size):
             raise ValueError(f"{pop} smaller than expected sample size {samp_size}")
 
     for slim_gen_param in ["captive_time", "mig_length_wild"]:

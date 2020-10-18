@@ -41,7 +41,7 @@ priors = {
     "pop_size_domestic_1": ScaledDist(scipy.stats.lognorm(s=0.25, loc=0, scale=1),
                                       scipy.stats.lognorm(s=0.25, loc=5, scale=np.exp(8.75))),
     "pop_size_domestic_2": ScaledDist(scipy.stats.lognorm(s=0.2, loc=0, scale=1),
-                                      scipy.stats.lognorm(s=0.2, loc=30, scale=np.exp(9.2)))
+                                      scipy.stats.lognorm(s=0.2, loc=5, scale=np.exp(9.2)))
 }
 
 for prior_name, prior in priors.items():

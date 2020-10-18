@@ -20,7 +20,7 @@ logging.info(f"Seq length is set to {seq_length}")
 num_cores = 0
 timeout = time.time() + 600  # seconds
 
-while num_cores is 0:
+while num_cores == 0:
     elfi.set_client("ipyparallel", profile="pbs")  # Assumes ipython profile named pbs
     c = elfi.client.get_client()
     num_cores = c.num_cores
