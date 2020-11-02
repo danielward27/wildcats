@@ -7,7 +7,7 @@
 #PBS -e ../output/logs/error/
 
 cd $PBS_O_WORKDIR
-conda activate wildcats_env
+source activate wildcats_env
 
 sleep 10
 python ./run_smc.py

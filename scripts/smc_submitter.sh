@@ -7,7 +7,7 @@
 #PBS -e ../output/logs/error/
 
 cd $PBS_O_WORKDIR
-conda activate wildcats_env
+source activate wildcats_env
 
 # Give some extra time to the controller as it waits for engines to start
 controller=$(qsub smc_controller.sh)

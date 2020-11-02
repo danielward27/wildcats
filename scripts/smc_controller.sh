@@ -7,6 +7,6 @@
 #PBS -e ../output/logs/error/
 
 cd $PBS_O_WORKDIR
-conda activate wildcats_env
+source activate wildcats_env
 
 ipcontroller --profile=pbs --nodb

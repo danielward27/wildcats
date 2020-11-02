@@ -7,6 +7,6 @@
 #PBS -e ../output/logs/error/
 
 cd $PBS_O_WORKDIR
-conda activate wildcats_env
+source activate wildcats_env
 
-mpiexec -n 128 ipengine --profile=pbs --quiet
+mpiexec -n 128 ipengine --profile=pbs
