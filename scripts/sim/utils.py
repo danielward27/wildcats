@@ -139,14 +139,14 @@ def merge_sum_stats(num_files, filename, output_filename):
 
 # merge_sum_stats(500, "../../output/summary_stats/summary_stats_{}.feather", "../../output/summary_stats.csv")
 
-def check_params(df):
+def check_params(df, n_samples = [5, 30, 10]):
     """Basic tests to ensure prior not malformed"""
     if np.any(df < 0):
         bad_params = df.columns[np.any(df <= 0, axis=0)]
         raise ValueError(f"Unexpected negative values at parameters {list(bad_params)}")
 
     # Check min pop_sizes are > sample sizes
-    samp_size = {"pop_size_domestic_1": 5, "pop_size_wild_1": 30, "pop_size_captive": 10}
+    samp_size = {"pop_size_domestic_1": n_samples[0], "pop_size_wild_1": n_samples[1], "pop_size_captive": n_samples[2]}
     for pop, samp_size in samp_size.items():
         if np.any(df[pop] < samp_size):
             raise ValueError(f"{pop} smaller than expected sample size {samp_size}")
