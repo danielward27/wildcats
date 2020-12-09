@@ -11,9 +11,9 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 seq_length = 44648284  # E3 length is 44648284
-train_scaler_n_sim = 128
-smc_n_samples = 1000
-smc_schedule = [17, 16, 15, 14, 13, 12, 11]
+train_scaler_n_sim = 32
+smc_n_samples = 100
+smc_schedule = [17, 16]
 
 logging.info(f"Seq length is set to {seq_length}")
 
