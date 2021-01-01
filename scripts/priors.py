@@ -11,7 +11,7 @@ import pickle
 import pandas as pd
 from sim.utils import check_params
 
-n_for_rejection_df = 100000
+n_for_rejection_df = 200000
 
 priors = {
     "bottleneck_strength_domestic": ScaledDist(scipy.stats.truncnorm(a=-0.5, b=np.inf, loc=0, scale=1),

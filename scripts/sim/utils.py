@@ -244,7 +244,7 @@ class ScaledDist:
         if show_scaled_kde:
             sample = self.sampling.rvs(100000)
             scaled_sample = self.scale_up_samples(sample)
-            sns.kdeplot(scaled_sample, bw=0.1, gridsize=200, label="scaled samples kde")
+            sns.kdeplot(scaled_sample, bw_method=0.1, gridsize=200, label="scaled samples kde")
         return plt.plot()
 
 

@@ -5,8 +5,6 @@ import time
 import pandas as pd
 import numpy as np
 import os
-import pickle
-import priors # This runs priors.py so we can read in the priors
 
 logging.basicConfig()
 logging.getLogger().setLevel(logging.WARNING)
