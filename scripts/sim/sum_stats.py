@@ -322,7 +322,6 @@ def elfi_sum(data_array):
 
     return results
 
-
 def elfi_sum_scaler(sum_stats, scaler=None):
     """
     Scales the summary statistics using standard scaler.
@@ -333,3 +332,25 @@ def elfi_sum_scaler(sum_stats, scaler=None):
         sum_stats = scaler.transform(sum_stats)
 
     return sum_stats
+
+def simple_sum(data):
+    """
+    Similar to simple sim, calculates summary stats in a way not compatible with elfi.
+    :param GenotypeData objects
+    :param scaler, scikit learn standard scaler to transform summary statistics
+    :returns dictionary, of summary statistics
+    """
+    results = []
+    
+    data.allelify()  # Convert to scikit allel format
+    pca_data = pca(data.genotypes["all_pops"].to_n_alt(), data.subpops)
+
+    trad_ss = traditional_stats(data)
+    pca_ss = pca_stats(pca_data)
+    ld_ss = ld_stats(data)
+    collated_ss = {**trad_ss, **pca_ss, **ld_ss}
+
+    collated_ss = sim.utils.flatten_dict(collated_ss)
+    collated_ss = dict(sorted(collated_ss.items()))  # Note requires python 3.7+ for ordered dictionary
+
+    return collated_ss

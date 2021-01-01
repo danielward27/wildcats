@@ -389,7 +389,6 @@ def elfi_sim(
     # Do not define locals above this.
     params = locals()
 
-    # Restarting client to avoid memory memory leak https://github.com/ipython/ipyparallel/issues/207
     slim_param_names = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
                         "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
 
@@ -433,7 +432,7 @@ def elfi_sim(
 
         demographic_events = sim.demographic_model(**recapitate_param_dict)
         tree_seq = sim.recapitate(tree_seq, demographic_events)
-
+        
         # Take samples to match number of samples to the WGS data
         samples = sim.sample_nodes(tree_seq, [5, 30, 10])
         tree_seq = tree_seq.simplify(samples=samples)
@@ -446,5 +445,100 @@ def elfi_sim(
     return data_array
 
 
+def simple_sim(
+    bottleneck_strength_domestic,
+    bottleneck_strength_wild,
+    bottleneck_time_domestic,
+    bottleneck_time_wild,
+    captive_time,
+    div_time,
+    mig_length_post_split,
+    mig_length_wild,
+    mig_rate_captive,
+    mig_rate_post_split,
+    mig_rate_wild,
+    pop_size_captive,
+    pop_size_domestic_1,
+    pop_size_domestic_2,
+    pop_size_wild_1,
+    pop_size_wild_2,
+    length, recombination_rate, mutation_rate,
+    n_samples=[5, 30, 10],
+    seed=None,
+):
+    """
+    Runs the simulation in a more simple way, not inherently compatible with elfi.
+    Assumes all params are ints except ones containing "mig_rate". Does not check parameters
+    to be valid robustly (likely check_params should be used to make sure things are good).
+    Note this is done in priors.py for the rejection feather file.
 
+    :param pop_size_domestic_1: list, domestic population size initially used in slim
+    :param pop_size_wild_1: list, wild population size initially used in slim
+    :param pop_size_captive: list, captive population size established at captive_time
+    :param mig_rate_captive: list, migration rate into the captive population from the wild population
+    :param mig_length_wild: list, length in generations from present that migration domestic -> wild starts
+    :param mig_rate_wild: list, migration rate from domestic into captive population
+    :param captive_time: list, Time in generations ago that the captive population is established
+    :param pop_size_domestic_2: list, Ancient (pre-bottleneck) domestic population size
+    :param pop_size_wild_2: list, Ancient (pre-bottleneck) wild population size
+    :param div_time: list, Divergence time between domestic cats and wildcats (lybica and silvestris)
+    :param mig_rate_post_split: list, Migration rate post divergence
+    :param mig_length_post_split: list, Number of generations post split migration occurs for
+    :param bottleneck_time_wild: list, Wild bottleneck (corresponding to migrating to Britain
+    :param bottleneck_strength_wild: list, equivalent generations
+    :param bottleneck_time_domestic:list, time bottleneck occurs
+    :param bottleneck_strength_domestic: list, equivalent generations
+    :param length: int, sequence length in bp
+    :param recombination_rate: int, recombination rate per base pair
+    :param mutation_rate: int, mutation rate per base pair
+    :param scaled_dist_dict: A dictionary of sim.utils.ScaledDists, which is used to scale the
+           parameters up to the target distribution. keys should match corresponding parameter names.
+    :param seed: int, seed for simulator
+    :param batch_size: number to run in serial
 
+    :return: np.array of GenotypeData classes
+    """
+    # Do not define locals above this.
+    params = locals()
+    np.random.seed(seed)
+
+    slim_param_names = ["pop_size_domestic_1", "pop_size_wild_1", "pop_size_captive",
+                        "mig_rate_captive", "mig_length_wild", "mig_rate_wild", "captive_time"]
+
+    recapitate_param_names = ["pop_size_domestic_2", "pop_size_wild_2", "bottleneck_time_wild",
+                              "bottleneck_strength_wild", "bottleneck_time_domestic", "bottleneck_strength_domestic",
+                              "mig_rate_post_split", "mig_length_post_split", "div_time"]
+
+    param_names = slim_param_names + recapitate_param_names
+
+    params = {key: val for key, val in params.items() if key in param_names}
+
+    # Convert int params to int
+    for key, val in params.items():
+        if "mig_rate" not in key:
+            params[key] = np.rint(val).astype(int)
+
+    for key, val in params.items():
+        logging.info(f"Param {key} = {val}")
+
+    # Constant sequence features
+    seq_features = SeqFeatures(length, recombination_rate, mutation_rate)
+
+    # Run simulation
+    sim = WildcatSimulation(seq_features=seq_features, random_seed=seed)
+    
+    slim_param_dict = {key: val for key, val in params.items() if key in slim_param_names}
+    recapitate_param_dict = {key: val for key, val in params.items() if key in recapitate_param_names}
+    command = sim.slim_command(slim_param_dict)
+
+    tree_seq = sim.run_slim(command)  # Decapitated
+    demographic_events = sim.demographic_model(**recapitate_param_dict)
+    tree_seq = sim.recapitate(tree_seq, demographic_events)
+
+    # Take samples to match number of samples to the WGS data
+    samples = sim.sample_nodes(tree_seq, n_samples)
+
+    tree_seq = tree_seq.simplify(samples=samples)
+
+    data = GenotypeData(tree_seq)
+    return data

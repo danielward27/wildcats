@@ -8,6 +8,10 @@ import scipy.stats
 from sim.utils import ScaledDist
 import matplotlib.pyplot as plt
 import pickle
+import pandas as pd
+from sim.utils import check_params
+
+n_for_rejection_df = 200000
 
 priors = {
     "bottleneck_strength_domestic": ScaledDist(scipy.stats.truncnorm(a=-0.5, b=np.inf, loc=0, scale=1),
@@ -44,10 +48,23 @@ priors = {
                                       scipy.stats.lognorm(s=0.2, loc=5, scale=np.exp(9.2)))
 }
 
+# Plot
 for prior_name, prior in priors.items():
     prior.plot(x_lab=prior_name)
     plt.savefig("../plots/priors/{}.png".format(prior_name))
     plt.clf()
 
+# For SMC
 with open("../output/priors.pkl", "wb") as f:
     pickle.dump(priors, f)
+
+# For rejection
+priors_df = pd.DataFrame(columns=priors.keys())
+
+np.random.seed(1)
+for key, prior in priors.items():
+    priors_df[key] = prior.target.rvs(n_for_rejection_df)
+    
+check_params(priors_df)
+    
+priors_df.to_feather("../output/rejection/priors.feather")  # Binary df storage. Not designed for long term storage, but fast.
