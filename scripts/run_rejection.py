@@ -26,9 +26,9 @@ for i in range(start_index, end_index):
     params = prior_df.astype(object).iloc[i].to_dict()  # Row of parameters
     
     try:  # Just to make sure results end up being NA instead of breaking the run.
-        data = simple_sim(**params, length = int(63494689),  # E1 length
-                      recombination_rate = 1.8e-8,
-                      mutation_rate = 6e-8, seed=i)  # Run model with params
+        data = simple_sim(**params, length=int(64340295),  # E2 length
+                          recombination_rate=1.8e-8,
+                          mutation_rate=6e-8, seed=i)  # Run model with params
 
     except Exception:
         logging.warning("The simulation failed to run on parameter index {}".format(i))
