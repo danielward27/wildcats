@@ -60,7 +60,7 @@ class WildcatSimulation:
         return filename
 
     def slim_command(self, param_dict,
-                     decap_trees_filename="../output/decap.trees",
+                     decap_trees_filename="decap.trees",
                      slim_script_filename='slim_model.slim'):
         """Uses a template slim command text file and replaces placeholders
         with parameter values to get a runnable command. Returns str.
