@@ -231,7 +231,7 @@ def binned_r2(genotypes, pos, seq_length, bins, labels,
         df_i["dist"] = df_i["pos"] - focal_mut_pos
         df_i["bins"] = pd.cut(df_i["dist"], bins, labels=labels)
 
-        df_i = df_i.groupby("bins").apply(
+        df_i = df_i.groupby("bins", group_keys=False).apply(
             lambda x: x.sample(comparison_mut_lim) if len(x) > comparison_mut_lim else x).reset_index(drop=True)
         r2_ = r2(genotypes[focal_mut_idx], genotypes[df_i["index"]])
         df_i["r2"] = r2_
@@ -284,12 +284,10 @@ def pca_stats(pca_data):
     # Individual medians and iqr
     pca_data_all_pops = pca_data.copy()
     pca_data_all_pops["population"] = "all_pops"  # Append "all_pops" so we can groupby
-    pca_data = pca_data.append(pca_data_all_pops)
-
-    stats_df = pca_data.groupby("population").agg((np.median, iqr))
+    pca_data = pd.concat([pca_data, pca_data_all_pops])
+    stats_df = pca_data.groupby("population", group_keys=False).agg((np.median, iqr))
     stats_df.columns = ['_'.join(col).strip() for col in stats_df.columns.values]
     stats = {**stats, **stats_df.to_dict()}
-
     return stats
 
 
