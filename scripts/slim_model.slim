@@ -22,11 +22,11 @@ initialize()
 	sim.addSubpop("p1", asInteger(pop_size_wild_1));
 }
 
-1: {
-	if (sim.generation >= forwards_mig_time){
+1: early() {
+	if (sim.cycle >= forwards_mig_time){
 		p1.setMigrationRates(p0, mig_rate_wild); // set migration rates from domestic cats (p0) into wild-living population (p1).
 	}
-	if (sim.generation == forwards_cap_time){   // Captive population established at captive_time
+	if (sim.cycle == forwards_cap_time){   // Captive population established at captive_time
 		sim.addSubpopSplit("p2", pop_size_captive, p1);
 		p2.setMigrationRates(p1, mig_rate_captive);
 	}
