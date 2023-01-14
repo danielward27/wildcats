@@ -175,7 +175,7 @@ class WildcatModel:
             seed = re.findall(r"%s(\d+)" % " -s ", command)[0]  # regex to find seed
             decap_trees_filename = add_seed_suffix_to_file(self.decap_trees_filename, seed)
         else:
-            decap_trees_filename = self.decap_trees_filename
+            decap_trees_filename = self.decap_trees_filenames
         
         try:
             logging.info(f"Running command: {command}")

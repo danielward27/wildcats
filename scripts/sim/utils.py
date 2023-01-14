@@ -139,7 +139,7 @@ def merge_sum_stats(num_files, filename, output_filename):
 
 # merge_sum_stats(500, "../../output/summary_stats/summary_stats_{}.feather", "../../output/summary_stats.csv")
 
-def check_params(df, n_samples = [5, 30, 10]):
+def check_params(df, n_samples):
     """Basic tests to ensure prior not malformed"""
     if np.any(df < 0):
         bad_params = df.columns[np.any(df <= 0, axis=0)]
@@ -192,62 +192,6 @@ def get_params(dictionary, function):
             if key in function.__code__.co_varnames}
 
 
-class ScaledDist:
-    """Handles scaling of prior distributions for elfi (to ensure matrix is well-conditioned).
-    Worth checking with the plot method that the scaling works as intended. I have checked
-    normal, uniform, lognormal and truncnormal work as intended.
-    sampling: The frozen distribution that should be passed to the elfi prior
-    target: The actual frozen distribution we want to be passed to the simulator"""
-
-    def __init__(self, sampling, target):
-
-        if not isinstance(sampling.dist, type(target.dist)):
-            raise ValueError("The sampling distribution and target distribution should be the same type.")
-
-        if len(sampling.args) != 0 or len(target.args) != 0:
-            raise ValueError("The parameters should be provided as keyword arguments.")
-
-        samp_non_loc_scale_kwds = {k: v for k, v in sampling.kwds.items() if k not in ["loc", "scale"]}
-        targ_non_loc_scale_kwds = {k: v for k, v in target.kwds.items() if k not in ["loc", "scale"]}
-
-        if samp_non_loc_scale_kwds != targ_non_loc_scale_kwds:
-            logging.warning("There is a mismatch in the parameters other than loc and scale, "
-                            "which could cause incorrect scaling")
-
-        if isinstance(sampling.dist, scipy.stats._continuous_distns.lognorm_gen):
-            if sampling.kwds["s"] != target.kwds["s"]:
-                raise ValueError("The shape parameters must match for scaling to function")
-
-        self.sampling = sampling
-        self.target = target
-
-    def scale_up_samples(self, samples):
-        """
-        Scales rvs from sampling distribution to being samples the target distribution.
-        """
-        # Standardise samples
-        samples = (samples - self.sampling.kwds["loc"]) / self.sampling.kwds["scale"]
-
-        # Scale to target dist
-        samples = samples * self.target.kwds["scale"] + self.target.kwds["loc"]
-        return samples
-
-    def plot(self, x_lab="", show_scaled_kde=False):
-        """
-        Plots ScaledDist object target distribution.
-        :param x_lab: x-label
-        :param show_scaled_kde: Adds a kernal density estimate of a scaled up sample from the sampling distribution.
-               Useful for checking scaling matches the target distribution.
-        """
-        plot_dist(self.target, x_lab, label="target", color="black")
-
-        if show_scaled_kde:
-            sample = self.sampling.rvs(100000)
-            scaled_sample = self.scale_up_samples(sample)
-            sns.kdeplot(scaled_sample, bw_method=0.1, gridsize=200, label="scaled samples kde")
-        return plt.plot()
-
-
 def plot_dist(continuous_dist, x_lab="", **kwargs):
     """
     Plots a pdf of a continuous varaiable.
@@ -255,14 +199,13 @@ def plot_dist(continuous_dist, x_lab="", **kwargs):
     :param x_lab, x-label string
     :return: plot
     """
-    x_lims = continuous_dist.ppf([0.001, 0.999])
-    x = np.linspace(x_lims[0], x_lims[1], 1000)
+    x_min, x_max = continuous_dist.ppf([0.001, 0.999])
+    x = np.linspace(x_min, x_max, 1000)
     y = continuous_dist.pdf(x)
     plt.plot(x, y, **kwargs)
     plt.subplots_adjust(left=0.2, bottom=0.2)
     plt.xlabel(x_lab)
     plt.ylabel("Probability density")
-
     return plt.plot()
 
 
