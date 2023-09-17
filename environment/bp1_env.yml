@@ -1,0 +1,27 @@
+name: bp1_envA
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - tabulate
+  - pyarrow
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - msprime
+  - numpy
+  - pandas
+  - pyslim
+  - seaborn
+  - mpi4py
+  - jupyterlab
+  - slim
+  - libgcc
+  - ipython
+  - mpich
+  - tskit
+  - torch
+  - sbi
+  - git
+
+
